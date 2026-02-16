@@ -1,0 +1,270 @@
+package com.tdull.webdavviewer.app.viewmodel
+
+import android.app.Application
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.tdull.webdavviewer.app.data.model.ServerConfig
+import com.tdull.webdavviewer.app.data.model.WebDAVException
+import com.tdull.webdavviewer.app.data.model.WebDAVResource
+import com.tdull.webdavviewer.app.data.repository.ConfigRepository
+import com.tdull.webdavviewer.app.data.repository.WebDAVRepository
+import com.tdull.webdavviewer.app.util.ErrorHandler
+import com.tdull.webdavviewer.app.util.ErrorInfo
+import com.tdull.webdavviewer.app.util.NetworkMonitor
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import javax.inject.Inject
+
+/**
+ * 文件浏览器UI状态
+ */
+data class FileBrowserUiState(
+    val isLoading: Boolean = false,
+    val files: List<WebDAVResource> = emptyList(),
+    val error: String? = null,
+    val errorInfo: ErrorInfo? = null,
+    val isConnected: Boolean = false,
+    val currentServer: ServerConfig? = null,
+    val isNetworkAvailable: Boolean = true
+)
+
+/**
+ * 文件浏览器ViewModel
+ */
+@HiltViewModel
+class FileBrowserViewModel @Inject constructor(
+    private val application: Application,
+    private val webDavRepository: WebDAVRepository,
+    private val configRepository: ConfigRepository,
+    private val networkMonitor: NetworkMonitor
+) : ViewModel() {
+
+    private val _uiState = MutableStateFlow(FileBrowserUiState())
+    val uiState: StateFlow<FileBrowserUiState> = _uiState.asStateFlow()
+
+    private val _currentPath = MutableStateFlow("/")
+    val currentPath: StateFlow<String> = _currentPath.asStateFlow()
+
+    // 路径历史栈，用于返回上一级
+    private val pathStack = mutableListOf<String>()
+
+    // 当前服务器配置
+    private var currentServerConfig: ServerConfig? = null
+
+    // 激活的服务器
+    val activeServer: StateFlow<ServerConfig?> = configRepository.activeServer
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    init {
+        // 监听网络状态
+        viewModelScope.launch {
+            networkMonitor.networkStatus.collect { status ->
+                _uiState.update { it.copy(isNetworkAvailable = status.isAvailable) }
+            }
+        }
+    }
+
+    /**
+     * 根据服务器ID选择服务器
+     */
+    fun selectServerById(serverId: String) {
+        viewModelScope.launch {
+            val server = configRepository.servers.first()
+                .find { it.id == serverId }
+            server?.let { selectServer(it) }
+        }
+    }
+
+    /**
+     * 选择服务器并连接
+     */
+    fun selectServer(config: ServerConfig) {
+        // 先检查网络状态
+        if (!networkMonitor.isNetworkAvailable()) {
+            _uiState.update {
+                it.copy(
+                    isConnected = false,
+                    isLoading = false,
+                    errorInfo = ErrorInfo(
+                        type = com.tdull.webdavviewer.app.util.ErrorType.NETWORK_UNAVAILABLE,
+                        title = "无网络连接",
+                        message = "请检查您的网络连接后重试",
+                        canRetry = true
+                    ),
+                    error = "无网络连接"
+                )
+            }
+            return
+        }
+
+        currentServerConfig = config
+        _uiState.update { it.copy(currentServer = config) }
+        
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null, errorInfo = null) }
+            
+            val result = webDavRepository.connect(config)
+            
+            result.fold(
+                onSuccess = {
+                    _uiState.update { it.copy(isConnected = true, isLoading = false) }
+                    // 连接成功后加载根目录
+                    _currentPath.value = "/"
+                    pathStack.clear()
+                    loadFiles("/")
+                },
+                onFailure = { error ->
+                    val errorInfo = ErrorHandler.getErrorInfo(error, application)
+                    _uiState.update { 
+                        it.copy(
+                            isConnected = false, 
+                            isLoading = false,
+                            errorInfo = errorInfo,
+                            error = errorInfo.message
+                        ) 
+                    }
+                }
+            )
+        }
+    }
+
+    /**
+     * 导航到指定路径
+     */
+    fun navigateTo(path: String) {
+        // 保存当前路径到历史栈
+        pathStack.add(_currentPath.value)
+        
+        _currentPath.value = path
+        loadFiles(path)
+    }
+
+    /**
+     * 返回上一级目录
+     */
+    fun navigateUp() {
+        if (pathStack.isNotEmpty()) {
+            val previousPath = pathStack.removeAt(pathStack.size - 1)
+            _currentPath.value = previousPath
+            loadFiles(previousPath)
+        } else if (_currentPath.value != "/") {
+            // 如果历史栈为空但不是根目录，则返回上级目录
+            val currentPath = _currentPath.value
+            val parentPath = getParentPath(currentPath)
+            _currentPath.value = parentPath
+            loadFiles(parentPath)
+        }
+    }
+
+    /**
+     * 刷新当前目录
+     */
+    fun refresh() {
+        viewModelScope.launch {
+            // 清除缓存后重新加载
+            (webDavRepository as? com.tdull.webdavviewer.app.data.repository.WebDAVRepositoryImpl)?.clearCache(_currentPath.value)
+            loadFiles(_currentPath.value)
+        }
+    }
+
+    /**
+     * 获取流媒体URL
+     */
+    fun getStreamUrl(path: String): String {
+        return webDavRepository.getStreamUrl(path)
+    }
+
+    /**
+     * 加载文件列表
+     */
+    private fun loadFiles(path: String) {
+        // 检查网络状态
+        if (!networkMonitor.isNetworkAvailable()) {
+            _uiState.update {
+                it.copy(
+                    isLoading = false,
+                    errorInfo = ErrorInfo(
+                        type = com.tdull.webdavviewer.app.util.ErrorType.NETWORK_UNAVAILABLE,
+                        title = "无网络连接",
+                        message = "请检查您的网络连接后重试",
+                        canRetry = true
+                    ),
+                    error = "无网络连接"
+                )
+            }
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null, errorInfo = null) }
+            
+            val result = webDavRepository.listFiles(path)
+            
+            result.fold(
+                onSuccess = { files ->
+                    // 过滤掉当前目录本身（WebDAV可能会返回当前目录）
+                    val filteredFiles = files.filter { it.path != path && it.name.isNotEmpty() }
+                    // 排序：目录在前，然后按名称排序
+                    val sortedFiles = filteredFiles.sortedWith(
+                        compareBy<WebDAVResource> { !it.isDirectory }
+                            .thenBy { it.name.lowercase() }
+                    )
+                    
+                    _uiState.update { 
+                        it.copy(
+                            files = sortedFiles,
+                            isLoading = false,
+                            error = null,
+                            errorInfo = null
+                        ) 
+                    }
+                },
+                onFailure = { error ->
+                    val errorInfo = ErrorHandler.getErrorInfo(error, application)
+                    _uiState.update { 
+                        it.copy(
+                            files = emptyList(),
+                            isLoading = false,
+                            errorInfo = errorInfo,
+                            error = errorInfo.message
+                        ) 
+                    }
+                }
+            )
+        }
+    }
+
+    /**
+     * 获取父目录路径
+     */
+    private fun getParentPath(path: String): String {
+        if (path == "/" || path.isEmpty()) return "/"
+        
+        val normalizedPath = path.trimEnd('/')
+        val lastSlashIndex = normalizedPath.lastIndexOf('/')
+        
+        return if (lastSlashIndex <= 0) {
+            "/"
+        } else {
+            normalizedPath.substring(0, lastSlashIndex + 1)
+        }
+    }
+
+    /**
+     * 清除错误信息
+     */
+    fun clearError() {
+        _uiState.update { it.copy(error = null, errorInfo = null) }
+    }
+}
