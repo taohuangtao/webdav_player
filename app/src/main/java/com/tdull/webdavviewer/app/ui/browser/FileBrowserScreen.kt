@@ -16,6 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import android.util.Log
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.viewmodel.FileBrowserViewModel
 
@@ -293,6 +294,9 @@ private fun handleFileClick(
     onVideoClick: (String) -> Unit,
     onImageClick: (String) -> Unit
 ) {
+    // 日志打印资源URL
+    Log.d("FileBrowserScreen", "File clicked: ${resource.path}")
+
     when {
         resource.isDirectory -> {
             // 进入目录
@@ -301,11 +305,13 @@ private fun handleFileClick(
         resource.isVideo -> {
             // 播放视频
             val streamUrl = viewModel.getStreamUrl(resource.path)
+            Log.d("FileBrowserScreen", "Video clicked: ${streamUrl}")
             onVideoClick(streamUrl)
         }
         resource.isImage -> {
             // 查看图片
             val streamUrl = viewModel.getStreamUrl(resource.path)
+            Log.d("FileBrowserScreen", "Image clicked: ${streamUrl}")
             onImageClick(streamUrl)
         }
         else -> {

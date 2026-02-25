@@ -278,11 +278,14 @@ class WebDAVClient @Inject constructor(
      */
     fun getStreamUrl(path: String): String {
         val config = currentConfig ?: throw IllegalStateException("未配置服务器")
-        return buildFullUrl(config, path)
+        val baseUrl = config.getNormalizedUrl()
+        val normalizedPath = if (path.startsWith("/")) path.substring(1) else path
+        // 文件URL不以/结尾
+        return "$baseUrl${normalizedPath.encodePath()}"
     }
     
     /**
-     * 构建完整的URL
+     * 构建完整的URL（目录用，带/结尾）
      */
     private fun buildFullUrl(config: ServerConfig, path: String): String {
         val baseUrl = config.getNormalizedUrl()
