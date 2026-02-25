@@ -3,6 +3,8 @@ package com.tdull.webdavviewer.app.ui.browser
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -92,7 +94,7 @@ fun FileItem(
             // 目录箭头
             if (resource.isDirectory) {
                 Icon(
-                    imageVector = Icons.Default.KeyboardArrowRight,
+                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                     contentDescription = "进入目录",
                     tint = MaterialTheme.colorScheme.outline
                 )
@@ -107,7 +109,7 @@ fun FileItem(
 @Composable
 private fun getResourceIcon(type: ResourceType): ImageVector {
     return when (type) {
-        ResourceType.DIRECTORY -> Icons.Default.List
+        ResourceType.DIRECTORY -> Icons.AutoMirrored.Filled.List
         ResourceType.VIDEO -> Icons.Default.PlayArrow
         ResourceType.IMAGE -> Icons.Default.Person
         ResourceType.AUDIO -> Icons.Default.Phone

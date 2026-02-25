@@ -2,20 +2,34 @@ package com.tdull.webdavviewer.app
 
 import android.app.Application
 import android.util.Log
+import coil.ImageLoader
+import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
 @HiltAndroidApp
-class WebDavApplication : Application() {
+class WebDavApplication : Application(), ImageLoaderFactory {
     
     companion object {
         private const val TAG = "WebDavApplication"
     }
+
+    @Inject
+    lateinit var imageLoader: ImageLoader
 
     override fun onCreate() {
         super.onCreate()
         
         // 设置全局异常处理器
         setupUncaughtExceptionHandler()
+    }
+    
+    /**
+     * 提供 Coil 全局 ImageLoader
+     * 使用 Hilt 注入的带认证拦截器的 ImageLoader
+     */
+    override fun newImageLoader(): ImageLoader {
+        return imageLoader
     }
     
     /**

@@ -2,6 +2,7 @@ package com.tdull.webdavviewer.app.ui.components
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -226,6 +227,6 @@ private fun getErrorIcon(errorType: ErrorType): ImageVector {
         ErrorType.UNSUPPORTED_FORMAT -> Icons.Default.BrokenImage
         ErrorType.SERVER_ERROR -> Icons.Default.Error
         ErrorType.INVALID_RESPONSE -> Icons.Default.DataObject
-        ErrorType.UNKNOWN -> Icons.Default.HelpOutline
+        ErrorType.UNKNOWN -> Icons.AutoMirrored.Filled.HelpOutline
     }
 }

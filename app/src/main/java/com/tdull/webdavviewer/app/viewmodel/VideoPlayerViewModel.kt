@@ -7,7 +7,10 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import com.tdull.webdavviewer.app.data.remote.WebDAVClient
 import com.tdull.webdavviewer.app.util.ErrorHandler
 import com.tdull.webdavviewer.app.util.ErrorInfo
 import com.tdull.webdavviewer.app.util.NetworkMonitor
@@ -17,6 +20,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import okhttp3.Credentials
 import javax.inject.Inject
 
 /**
@@ -40,7 +44,8 @@ data class VideoPlayerUiState(
 class VideoPlayerViewModel @Inject constructor(
     private val application: Application,
     private val savedStateHandle: SavedStateHandle,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val webDAVClient: WebDAVClient  // 注入 WebDAVClient 用于获取认证信息
 ) : ViewModel() {
 
     private val _player = MutableStateFlow<ExoPlayer?>(null)
@@ -102,8 +107,12 @@ class VideoPlayerViewModel @Inject constructor(
             try {
                 _uiState.update { it.copy(isLoading = true, error = null, errorInfo = null) }
 
-                // 创建 ExoPlayer 实例
+                // 创建带有认证的 HttpDataSource.Factory
+                val dataSourceFactory = createHttpDataSourceFactory()
+                
+                // 创建 ExoPlayer 实例，配置认证数据源
                 val exoPlayer = ExoPlayer.Builder(application)
+                    .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
                     .build()
                     .apply {
                         // 创建媒体项
@@ -285,5 +294,25 @@ class VideoPlayerViewModel @Inject constructor(
      */
     fun clearError() {
         _uiState.update { it.copy(error = null, errorInfo = null) }
+    }
+    
+    /**
+     * 创建带有 WebDAV 认证的 HttpDataSource.Factory
+     * 自动为请求添加 Authorization 头部
+     */
+    private fun createHttpDataSourceFactory(): DefaultHttpDataSource.Factory {
+        val factory = DefaultHttpDataSource.Factory()
+            .setUserAgent("WebDAVViewer")
+            .setAllowCrossProtocolRedirects(true)
+        
+        // 如果有服务器配置且需要认证，添加认证头部
+        webDAVClient.getCurrentConfig()?.let { config ->
+            if (config.requiresAuth()) {
+                val credentials = Credentials.basic(config.username, config.password)
+                factory.setDefaultRequestProperties(mapOf("Authorization" to credentials))
+            }
+        }
+        
+        return factory
     }
 }
