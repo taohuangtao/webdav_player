@@ -23,6 +23,7 @@ import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
 import java.net.URLDecoder
+import android.util.Log
 
 /**
  * 图片查看器界面
@@ -117,6 +118,7 @@ fun ImageViewerScreen(
                     )
                 },
             onState = { state ->
+                Log.d("ImageViewerScreen", "onState: $state")
                 when (state) {
                     is AsyncImagePainter.State.Loading -> {
                         // 加载中
