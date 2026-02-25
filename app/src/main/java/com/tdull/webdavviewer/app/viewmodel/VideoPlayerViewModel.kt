@@ -1,6 +1,8 @@
 package com.tdull.webdavviewer.app.viewmodel
 
 import android.app.Application
+import android.content.Context
+import android.media.AudioManager
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -15,6 +17,8 @@ import com.tdull.webdavviewer.app.util.ErrorHandler
 import com.tdull.webdavviewer.app.util.ErrorInfo
 import com.tdull.webdavviewer.app.util.NetworkMonitor
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -33,7 +37,9 @@ data class VideoPlayerUiState(
     val isPlaying: Boolean = false,
     val currentPosition: Long = 0,
     val duration: Long = 0,
-    val isNetworkAvailable: Boolean = true
+    val isNetworkAvailable: Boolean = true,
+    val volume: Float = 1f, // 音量 0-1
+    val isPlaybackEnded: Boolean = false // 是否播放结束
 )
 
 /**
@@ -62,6 +68,14 @@ class VideoPlayerViewModel @Inject constructor(
 
     // 播放器事件监听器
     private var playerListener: Player.Listener? = null
+
+    // 进度更新任务
+    private var progressUpdateJob: Job? = null
+
+    // 音频管理器
+    private val audioManager: AudioManager by lazy {
+        application.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    }
 
     init {
         // 监听网络状态
@@ -132,6 +146,7 @@ class VideoPlayerViewModel @Inject constructor(
 
                 _player.value = exoPlayer
                 _uiState.update { it.copy(isLoading = false) }
+                startProgressUpdate() // 启动进度更新
             } catch (e: Exception) {
                 val errorInfo = ErrorHandler.getErrorInfo(e, application)
                 _uiState.update {
@@ -159,7 +174,7 @@ class VideoPlayerViewModel @Inject constructor(
                         _uiState.update { it.copy(isLoading = true) }
                     }
                     ExoPlayer.STATE_ENDED -> {
-                        _uiState.update { it.copy(isPlaying = false) }
+                        _uiState.update { it.copy(isPlaying = false, isPlaybackEnded = true) }
                     }
                     ExoPlayer.STATE_IDLE -> {
                         // 播放器空闲
@@ -257,9 +272,38 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     /**
+     * 重新播放（从头开始）
+     */
+    fun replay() {
+        _player.value?.let { player ->
+            player.seekTo(0)
+            player.play()
+            _uiState.update { it.copy(isPlaybackEnded = false) }
+            _playWhenReady.value = true
+        }
+    }
+
+    /**
+     * 设置音量
+     * @param volume 音量值 0-1
+     */
+    fun setVolume(volume: Float) {
+        _player.value?.volume = volume
+        _uiState.update { it.copy(volume = volume) }
+    }
+
+    /**
+     * 获取当前音量
+     */
+    fun getVolume(): Float {
+        return _player.value?.volume ?: 1f
+    }
+
+    /**
      * 释放播放器
      */
     fun releasePlayer() {
+        stopProgressUpdate() // 停止进度更新
         _player.value?.let { player ->
             // 移除监听器
             playerListener?.let { player.removeListener(it) }
@@ -294,6 +338,35 @@ class VideoPlayerViewModel @Inject constructor(
      */
     fun clearError() {
         _uiState.update { it.copy(error = null, errorInfo = null) }
+    }
+
+    /**
+     * 开始更新播放进度
+     */
+    private fun startProgressUpdate() {
+        progressUpdateJob?.cancel()
+        progressUpdateJob = viewModelScope.launch {
+            while (true) {
+                _player.value?.let { player ->
+                    _uiState.update {
+                        it.copy(
+                            currentPosition = player.currentPosition,
+                            duration = player.duration.coerceAtLeast(0L),
+                            volume = player.volume
+                        )
+                    }
+                }
+                delay(500) // 每500ms更新一次
+            }
+        }
+    }
+
+    /**
+     * 停止更新播放进度
+     */
+    private fun stopProgressUpdate() {
+        progressUpdateJob?.cancel()
+        progressUpdateJob = null
     }
     
     /**
