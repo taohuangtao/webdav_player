@@ -87,6 +87,17 @@ class WebDAVRepositoryImpl @Inject constructor(
         }
     }
     
+    override suspend fun getVideoPreviews(videoPath: String): Result<List<String>> = withContext(Dispatchers.IO) {
+        try {
+            val previews = client.getVideoPreviews(videoPath)
+            Result.success(previews)
+        } catch (e: WebDAVException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            Result.failure(WebDAVException.ConnectionFailed(e))
+        }
+    }
+    
     /**
      * 获取缓存的目录列表（线程安全）
      */

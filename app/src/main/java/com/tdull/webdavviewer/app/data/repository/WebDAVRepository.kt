@@ -34,4 +34,11 @@ interface WebDAVRepository {
      * @return 连接测试结果
      */
     suspend fun testConnection(config: ServerConfig): Result<Boolean>
+    
+    /**
+     * 获取视频预览图列表
+     * @param videoPath 视频文件路径
+     * @return 预览图URL列表
+     */
+    suspend fun getVideoPreviews(videoPath: String): Result<List<String>>
 }

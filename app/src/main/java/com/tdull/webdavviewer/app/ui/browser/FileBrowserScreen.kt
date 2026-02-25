@@ -34,6 +34,10 @@ fun FileBrowserScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val currentPath by viewModel.currentPath.collectAsState()
+    val videoPreviews by viewModel.videoPreviews.collectAsState()
+    
+    // 全屏预览图状态
+    var previewState by remember { mutableStateOf<PreviewState?>(null) }
     
     // 初始化服务器连接
     LaunchedEffect(serverId) {
@@ -115,6 +119,7 @@ fun FileBrowserScreen(
                     // 文件列表
                     FileList(
                         files = uiState.files,
+                        videoPreviews = videoPreviews,
                         onFileClick = { resource ->
                             handleFileClick(
                                 resource = resource,
@@ -122,13 +127,36 @@ fun FileBrowserScreen(
                                 onVideoClick = onVideoClick,
                                 onImageClick = onImageClick
                             )
+                        },
+                        onPreviewClick = { images, index ->
+                            previewState = PreviewState(images, index)
+                        },
+                        onLoadPreviews = { path ->
+                            viewModel.loadVideoPreviews(path)
                         }
                     )
                 }
             }
         }
     }
+    
+    // 全屏预览图对话框
+    previewState?.let { state ->
+        ImagePreviewDialog(
+            images = state.images,
+            initialIndex = state.initialIndex,
+            onDismiss = { previewState = null }
+        )
+    }
 }
+
+/**
+ * 预览状态
+ */
+private data class PreviewState(
+    val images: List<String>,
+    val initialIndex: Int
+)
 
 /**
  * 文件列表
@@ -136,7 +164,10 @@ fun FileBrowserScreen(
 @Composable
 private fun FileList(
     files: List<WebDAVResource>,
-    onFileClick: (WebDAVResource) -> Unit
+    videoPreviews: Map<String, List<String>>,
+    onFileClick: (WebDAVResource) -> Unit,
+    onPreviewClick: (List<String>, Int) -> Unit,
+    onLoadPreviews: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -146,9 +177,19 @@ private fun FileList(
             items = files,
             key = { it.path }
         ) { resource ->
+            // 加载视频预览图
+            val previews = if (resource.isVideo) {
+                videoPreviews[resource.path] ?: emptyList()
+            } else {
+                emptyList()
+            }
+            
             FileItem(
                 resource = resource,
-                onClick = { onFileClick(resource) }
+                onClick = { onFileClick(resource) },
+                previewImages = previews,
+                onPreviewClick = onPreviewClick,
+                onLoadPreviews = { onLoadPreviews(resource.path) }
             )
         }
     }

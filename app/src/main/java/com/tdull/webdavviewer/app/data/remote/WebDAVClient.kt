@@ -608,6 +608,74 @@ class WebDAVClient @Inject constructor(
                 .replace("%2F", "/")
         }
     }
+    
+    /**
+     * 获取视频预览图列表
+     * 视频文件 aaa.mp4 -> 预览图目录 ._aaa/ 下的 *.jpg 文件
+     * @param videoPath 视频文件路径，如 "/movies/aaa.mp4"
+     * @return 预览图URL列表
+     */
+    suspend fun getVideoPreviews(videoPath: String): List<String> {
+        val config = currentConfig ?: throw IllegalStateException("未配置服务器")
+        
+        // 计算预览图目录路径
+        val previewDirPath = getPreviewDirPath(videoPath)
+        
+        Log.d(TAG, "获取视频预览图: videoPath=$videoPath, previewDir=$previewDirPath")
+        
+        return try {
+            // 获取预览图目录下的文件列表
+            val detectedType = serverType ?: detectServerType(config)
+            val files = when (detectedType) {
+                ServerType.PROPFIND -> listFilesViaPropfind(config, previewDirPath)
+                ServerType.AUTOINDEX -> listFilesViaAutoindex(config, previewDirPath)
+            }
+            
+            // 过滤出图片文件并排序
+            val imageFiles = files
+                .filter { !it.isDirectory && it.isImage }
+                .sortedBy { it.name }
+            
+            // 转换为完整URL
+            imageFiles.map { getStreamUrl(it.path) }
+        } catch (e: WebDAVException.ResourceNotFound) {
+            Log.d(TAG, "预览图目录不存在: $previewDirPath")
+            emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "获取预览图失败: ${e.message}")
+            emptyList()
+        }
+    }
+    
+    /**
+     * 根据视频路径计算预览图目录路径
+     * /movies/aaa.mp4 -> /movies/._aaa/
+     */
+    private fun getPreviewDirPath(videoPath: String): String {
+        // 标准化路径
+        val normalizedPath = videoPath.trimStart('/')
+        
+        // 获取文件名和扩展名
+        val lastSlashIndex = normalizedPath.lastIndexOf('/')
+        val (dirPath, fileName) = if (lastSlashIndex >= 0) {
+            normalizedPath.substring(0, lastSlashIndex) to normalizedPath.substring(lastSlashIndex + 1)
+        } else {
+            "" to normalizedPath
+        }
+        
+        // 去掉扩展名
+        val fileNameWithoutExt = fileName.substringBeforeLast('.')
+        
+        // 构建预览图目录名: ._xxx
+        val previewDirName = "._${fileNameWithoutExt}"
+        
+        // 构建完整路径
+        return if (dirPath.isEmpty()) {
+            "/$previewDirName/"
+        } else {
+            "/$dirPath/$previewDirName/"
+        }
+    }
 }
 
 /**

@@ -58,6 +58,10 @@ class FileBrowserViewModel @Inject constructor(
     // 当前服务器配置
     private var currentServerConfig: ServerConfig? = null
 
+    // 视频预览图缓存：Map<视频路径, 预览图URL列表>
+    private val _videoPreviews = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    val videoPreviews: StateFlow<Map<String, List<String>>> = _videoPreviews.asStateFlow()
+
     // 激活的服务器
     val activeServer: StateFlow<ServerConfig?> = configRepository.activeServer
         .stateIn(
@@ -183,6 +187,37 @@ class FileBrowserViewModel @Inject constructor(
      */
     fun getStreamUrl(path: String): String {
         return webDavRepository.getStreamUrl(path)
+    }
+    
+    /**
+     * 加载视频预览图
+     */
+    fun loadVideoPreviews(videoPath: String) {
+        // 如果已经缓存，则不再重复加载
+        if (_videoPreviews.value.containsKey(videoPath)) {
+            return
+        }
+        
+        viewModelScope.launch {
+            val result = webDavRepository.getVideoPreviews(videoPath)
+            result.fold(
+                onSuccess = { previews ->
+                    if (previews.isNotEmpty()) {
+                        _videoPreviews.update { it + (videoPath to previews) }
+                    }
+                },
+                onFailure = {
+                    // 静默失败，不影响主流程
+                }
+            )
+        }
+    }
+    
+    /**
+     * 获取视频预览图列表
+     */
+    fun getVideoPreviewList(videoPath: String): List<String> {
+        return _videoPreviews.value[videoPath] ?: emptyList()
     }
 
     /**
