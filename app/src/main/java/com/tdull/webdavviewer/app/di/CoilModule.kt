@@ -13,6 +13,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -25,12 +26,13 @@ object CoilModule {
 
     /**
      * 提供优化的Coil ImageLoader
+     * 使用带WebDAV认证的OkHttpClient
      */
     @Provides
     @Singleton
     fun provideImageLoader(
         @ApplicationContext context: Context,
-        okHttpClient: OkHttpClient
+        @Named("Coil") coilOkHttpClient: OkHttpClient  // 使用带认证拦截器的OkHttpClient
     ): ImageLoader {
         return ImageLoader.Builder(context)
             // 使用内存缓存
@@ -46,8 +48,8 @@ object CoilModule {
                     .maxSizeBytes(512L * 1024 * 1024) // 512MB磁盘缓存
                     .build()
             }
-            // 网络配置
-            .okHttpClient(okHttpClient)
+            // 网络配置 - 使用带认证的OkHttpClient
+            .okHttpClient(coilOkHttpClient)
             // 缓存策略
             .memoryCachePolicy(CachePolicy.ENABLED)
             .diskCachePolicy(CachePolicy.ENABLED)

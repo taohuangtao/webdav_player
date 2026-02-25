@@ -186,6 +186,12 @@ class WebDAVClient @Inject constructor(
     fun getServerType(): ServerType? = serverType
     
     /**
+     * 获取当前服务器配置
+     * 用于认证拦截器获取认证信息
+     */
+    fun getCurrentConfig(): ServerConfig? = currentConfig
+    
+    /**
      * 列出指定路径下的文件和目录
      */
     fun listFiles(path: String): List<WebDAVResource> {
