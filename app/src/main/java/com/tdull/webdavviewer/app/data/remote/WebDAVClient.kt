@@ -352,6 +352,16 @@ class WebDAVClient @Inject constructor(
     private fun parseMultistatusResponse(xml: String, baseUrl: String): List<WebDAVResource> {
         val resources = mutableListOf<WebDAVResource>()
         
+        // 从 baseUrl 提取服务器的 base path
+        // 例如: "https://hdav.tdull.com:48080/_dav_j893jejek393" -> "/_dav_j893jejek393"
+        val basePath = try {
+            val uri = java.net.URI(baseUrl)
+            uri.path?.trimEnd('/') ?: ""
+        } catch (e: Exception) {
+            // 回退到简单提取
+            baseUrl.substringAfter("://").substringAfter('/').let { "/$it" }.trimEnd('/')
+        }
+        
         try {
             val factory = XmlPullParserFactory.newInstance()
             factory.isNamespaceAware = true
@@ -417,11 +427,12 @@ class WebDAVClient @Inject constructor(
                             parser.name == "response" && parser.namespace == "DAV:" -> {
                                 val path = currentPath
                                 if (path != null) {
-                                    val name = currentName ?: path.substringAfterLast('/').ifEmpty { path }
+                                    // 移除服务器的 base path，生成相对路径
+                                    val relativePath = removeBasePath(path, basePath)
                                     
-                                    val normalizedPath = path.trim('/')
-                                    val normalizedBase = baseUrl.substringAfter("://").substringAfter('/')
-                                    if (normalizedPath != normalizedBase.trim('/') && normalizedPath.isNotEmpty()) {
+                                    // 过滤掉当前请求目录（相对路径为空表示是当前目录本身）
+                                    if (relativePath.isNotEmpty()) {
+                                        val name = currentName ?: path.substringAfterLast('/').ifEmpty { path }
                                         val displayName = URLDecoder.decode(name, StandardCharsets.UTF_8.name())
                                         val resourceType = WebDAVResource.determineResourceType(
                                             displayName, currentContentType, isDirectory
@@ -429,7 +440,7 @@ class WebDAVClient @Inject constructor(
                                         
                                         resources.add(
                                             WebDAVResource(
-                                                path = path,
+                                                path = relativePath,
                                                 name = displayName,
                                                 isDirectory = isDirectory,
                                                 size = currentSize,
@@ -452,6 +463,33 @@ class WebDAVClient @Inject constructor(
         }
         
         return resources.sortedWith(compareBy({ !it.isDirectory }, { it.name.lowercase() }))
+    }
+    
+    /**
+     * 从完整路径中移除服务器的 base path，生成相对路径
+     * 例如: basePath="/_dav_j893jejek393", path="/_dav_j893jejek393/_vvv/" -> "/_vvv/"
+     */
+    private fun removeBasePath(path: String, basePath: String): String {
+        if (basePath.isEmpty()) {
+            return path
+        }
+        
+        val normalizedPath = path.trimEnd('/')
+        val normalizedBasePath = basePath.trimEnd('/')
+        
+        // 检查路径是否以 base path 开头
+        if (normalizedPath == normalizedBasePath) {
+            // 路径就是 base path 本身，返回空（表示根目录）
+            return ""
+        }
+        
+        // 检查是否以 base path + "/" 开头（表示是 base path 的子资源）
+        if (normalizedPath.startsWith("$normalizedBasePath/")) {
+            return normalizedPath.removePrefix(normalizedBasePath)
+        }
+        
+        // 如果路径不以 base path 开头，可能是相对路径或其他格式，直接返回
+        return path
     }
     
     /**
@@ -667,7 +705,7 @@ class WebDAVClient @Inject constructor(
         val fileNameWithoutExt = fileName.substringBeforeLast('.')
         
         // 构建预览图目录名: ._xxx
-        val previewDirName = "._${fileNameWithoutExt}"
+        val previewDirName = "._${fileNameWithoutExt}_screenshots"
         
         // 构建完整路径
         return if (dirPath.isEmpty()) {
