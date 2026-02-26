@@ -13,6 +13,7 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.tdull.webdavviewer.app.data.remote.WebDAVClient
+import com.tdull.webdavviewer.app.data.repository.PlayerSettingsRepository
 import com.tdull.webdavviewer.app.util.ErrorHandler
 import com.tdull.webdavviewer.app.util.ErrorInfo
 import com.tdull.webdavviewer.app.util.NetworkMonitor
@@ -28,6 +29,20 @@ import okhttp3.Credentials
 import javax.inject.Inject
 
 /**
+ * 视频信息数据类
+ */
+data class VideoInfo(
+    val videoUrl: String = "",
+    val duration: Long = 0,
+    val bitrate: Long? = null,
+    val videoCodec: String? = null,
+    val audioCodec: String? = null,
+    val resolution: String? = null,
+    val frameRate: Float? = null,
+    val mimeType: String? = null
+)
+
+/**
  * 视频播放器UI状态
  */
 data class VideoPlayerUiState(
@@ -39,7 +54,13 @@ data class VideoPlayerUiState(
     val duration: Long = 0,
     val isNetworkAvailable: Boolean = true,
     val volume: Float = 1f, // 音量 0-1
-    val isPlaybackEnded: Boolean = false // 是否播放结束
+    val isPlaybackEnded: Boolean = false, // 是否播放结束
+    val playbackSpeed: Float = 1f, // 当前播放速度
+    val seekSeconds: Int = 10, // 快进快退秒数
+    val videoInfo: VideoInfo? = null, // 视频信息
+    val showVideoInfoDialog: Boolean = false, // 显示视频信息弹窗
+    val showSettingsDialog: Boolean = false, // 显示设置弹窗
+    val showSpeedMenu: Boolean = false // 显示倍速菜单
 )
 
 /**
@@ -51,7 +72,8 @@ class VideoPlayerViewModel @Inject constructor(
     private val application: Application,
     private val savedStateHandle: SavedStateHandle,
     private val networkMonitor: NetworkMonitor,
-    private val webDAVClient: WebDAVClient  // 注入 WebDAVClient 用于获取认证信息
+    private val webDAVClient: WebDAVClient,  // 注入 WebDAVClient 用于获取认证信息
+    private val playerSettingsRepository: PlayerSettingsRepository  // 注入播放器设置仓库
 ) : ViewModel() {
 
     private val _player = MutableStateFlow<ExoPlayer?>(null)
@@ -82,6 +104,13 @@ class VideoPlayerViewModel @Inject constructor(
         viewModelScope.launch {
             networkMonitor.networkStatus.collect { status ->
                 _uiState.update { it.copy(isNetworkAvailable = status.isAvailable) }
+            }
+        }
+
+        // 加载播放器设置
+        viewModelScope.launch {
+            playerSettingsRepository.getPlayerSettings().collect { settings ->
+                _uiState.update { it.copy(seekSeconds = settings.seekSeconds) }
             }
         }
     }
@@ -297,6 +326,93 @@ class VideoPlayerViewModel @Inject constructor(
      */
     fun getVolume(): Float {
         return _player.value?.volume ?: 1f
+    }
+
+    /**
+     * 快进
+     */
+    fun seekForward() {
+        _player.value?.let { player ->
+            val seekSeconds = _uiState.value.seekSeconds
+            val newPosition = player.currentPosition + (seekSeconds * 1000L)
+            val duration = player.duration
+            player.seekTo(newPosition.coerceAtMost(duration))
+        }
+    }
+
+    /**
+     * 快退
+     */
+    fun seekBackward() {
+        _player.value?.let { player ->
+            val seekSeconds = _uiState.value.seekSeconds
+            val newPosition = player.currentPosition - (seekSeconds * 1000L)
+            player.seekTo(newPosition.coerceAtLeast(0L))
+        }
+    }
+
+    /**
+     * 设置播放速度
+     */
+    fun setPlaybackSpeed(speed: Float) {
+        _player.value?.setPlaybackSpeed(speed)
+        _uiState.update { it.copy(playbackSpeed = speed, showSpeedMenu = false) }
+        viewModelScope.launch {
+            playerSettingsRepository.savePlaybackSpeed(speed)
+        }
+    }
+
+    /**
+     * 设置快进快退秒数
+     */
+    fun setSeekSeconds(seconds: Int) {
+        _uiState.update { it.copy(seekSeconds = seconds) }
+        viewModelScope.launch {
+            playerSettingsRepository.saveSeekSeconds(seconds)
+        }
+    }
+
+    /**
+     * 显示/隐藏视频信息弹窗
+     */
+    fun toggleVideoInfoDialog(show: Boolean) {
+        if (show) {
+            updateVideoInfo()
+        }
+        _uiState.update { it.copy(showVideoInfoDialog = show) }
+    }
+
+    /**
+     * 显示/隐藏设置弹窗
+     */
+    fun toggleSettingsDialog(show: Boolean) {
+        _uiState.update { it.copy(showSettingsDialog = show) }
+    }
+
+    /**
+     * 显示/隐藏倍速菜单
+     */
+    fun toggleSpeedMenu(show: Boolean) {
+        _uiState.update { it.copy(showSpeedMenu = show) }
+    }
+
+    /**
+     * 更新视频信息
+     */
+    private fun updateVideoInfo() {
+        _player.value?.let { player ->
+            val videoInfo = VideoInfo(
+                videoUrl = currentVideoUrl ?: "",
+                duration = player.duration.coerceAtLeast(0L),
+                bitrate = player.currentMediaItem?.mediaMetadata?.extras?.getLong("bitrate")?.takeIf { it > 0 },
+                videoCodec = null, // ExoPlayer 不直接提供编解码器信息，需要通过 Format 获取
+                audioCodec = null,
+                resolution = null,
+                frameRate = null,
+                mimeType = player.currentMediaItem?.localConfiguration?.mimeType
+            )
+            _uiState.update { it.copy(videoInfo = videoInfo) }
+        }
     }
 
     /**

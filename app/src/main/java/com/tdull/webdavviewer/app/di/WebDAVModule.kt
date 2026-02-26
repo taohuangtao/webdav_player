@@ -1,7 +1,10 @@
 package com.tdull.webdavviewer.app.di
 
 import android.content.Context
+import com.tdull.webdavviewer.app.data.local.PlayerSettingsDataStore
 import com.tdull.webdavviewer.app.data.remote.WebDAVClient
+import com.tdull.webdavviewer.app.data.repository.PlayerSettingsRepository
+import com.tdull.webdavviewer.app.data.repository.PlayerSettingsRepositoryImpl
 import com.tdull.webdavviewer.app.data.repository.WebDAVRepository
 import com.tdull.webdavviewer.app.data.repository.WebDAVRepositoryImpl
 import com.tdull.webdavviewer.app.util.NetworkMonitor
@@ -119,6 +122,16 @@ object WebDAVModule {
         abstract fun bindWebDAVRepository(
             impl: WebDAVRepositoryImpl
         ): WebDAVRepository
+    }
+
+    @Module
+    @InstallIn(SingletonComponent::class)
+    abstract class PlayerSettingsRepositoryModule {
+        @Binds
+        @Singleton
+        abstract fun bindPlayerSettingsRepository(
+            impl: PlayerSettingsRepositoryImpl
+        ): PlayerSettingsRepository
     }
 }
 

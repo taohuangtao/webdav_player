@@ -6,9 +6,14 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.FastForward
+import androidx.compose.material.icons.filled.FastRewind
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
@@ -27,6 +32,7 @@ import androidx.media3.ui.PlayerView
 import com.tdull.webdavviewer.app.ui.theme.PlayerTheme
 import com.tdull.webdavviewer.app.viewmodel.VideoPlayerViewModel
 import com.tdull.webdavviewer.app.viewmodel.VideoPlayerUiState
+import com.tdull.webdavviewer.app.viewmodel.VideoInfo
 import kotlinx.coroutines.delay
 
 /**
@@ -90,8 +96,30 @@ fun VideoPlayerScreen(
                     onReplayClick = { viewModel.replay() },
                     onSeek = { position -> viewModel.seekTo(position) },
                     onVolumeChange = { volume -> viewModel.setVolume(volume) },
+                    onSeekForward = { viewModel.seekForward() },
+                    onSeekBackward = { viewModel.seekBackward() },
+                    onSpeedChange = { speed -> viewModel.setPlaybackSpeed(speed) },
+                    onShowVideoInfo = { viewModel.toggleVideoInfoDialog(true) },
+                    onShowSettings = { viewModel.toggleSettingsDialog(true) },
                     modifier = Modifier.align(Alignment.BottomStart)
                 )
+
+                // 视频信息弹窗
+                if (uiState.showVideoInfoDialog) {
+                    VideoInfoDialog(
+                        videoInfo = uiState.videoInfo,
+                        onDismiss = { viewModel.toggleVideoInfoDialog(false) }
+                    )
+                }
+
+                // 设置弹窗
+                if (uiState.showSettingsDialog) {
+                    PlayerSettingsDialog(
+                        seekSeconds = uiState.seekSeconds,
+                        onSeekSecondsChange = { seconds -> viewModel.setSeekSeconds(seconds) },
+                        onDismiss = { viewModel.toggleSettingsDialog(false) }
+                    )
+                }
             }
 
             // 加载指示器
@@ -199,11 +227,20 @@ private fun VideoPlayerBottomControls(
     onReplayClick: () -> Unit,
     onSeek: (Long) -> Unit,
     onVolumeChange: (Float) -> Unit,
+    onSeekForward: () -> Unit,
+    onSeekBackward: () -> Unit,
+    onSpeedChange: (Float) -> Unit,
+    onShowVideoInfo: () -> Unit,
+    onShowSettings: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isSeeking by remember { mutableStateOf(false) }
     var seekPosition by remember { mutableLongStateOf(0L) }
     var showVolumeSlider by remember { mutableStateOf(false) }
+    var showSpeedMenu by remember { mutableStateOf(false) }
+    var showMoreMenu by remember { mutableStateOf(false) }
+
+    val speedOptions = listOf(0.5f, 0.7f, 1f, 1.5f, 2f, 3f, 4f)
 
     Column(
         modifier = modifier
@@ -233,6 +270,16 @@ private fun VideoPlayerBottomControls(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
         ) {
+            // 快退按钮
+            IconButton(onClick = onSeekBackward) {
+                Icon(
+                    imageVector = Icons.Default.FastRewind,
+                    contentDescription = "快退${uiState.seekSeconds}秒",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+
             // 播放/暂停按钮
             IconButton(onClick = onPlayPauseClick) {
                 Icon(
@@ -240,6 +287,16 @@ private fun VideoPlayerBottomControls(
                     contentDescription = if (uiState.isPlaying) "暂停" else "播放",
                     tint = Color.White,
                     modifier = Modifier.size(32.dp)
+                )
+            }
+
+            // 快进按钮
+            IconButton(onClick = onSeekForward) {
+                Icon(
+                    imageVector = Icons.Default.FastForward,
+                    contentDescription = "快进${uiState.seekSeconds}秒",
+                    tint = Color.White,
+                    modifier = Modifier.size(28.dp)
                 )
             }
 
@@ -278,6 +335,52 @@ private fun VideoPlayerBottomControls(
             )
 
             Spacer(modifier = Modifier.weight(1f))
+
+            // 倍速选择
+            Box {
+                TextButton(onClick = { showSpeedMenu = true }) {
+                    Text(
+                        text = "${uiState.playbackSpeed}x",
+                        color = Color.White,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showSpeedMenu,
+                    onDismissRequest = { showSpeedMenu = false },
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.9f))
+                ) {
+                    speedOptions.forEach { speed ->
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "${speed}x",
+                                        color = if (speed == uiState.playbackSpeed)
+                                            MaterialTheme.colorScheme.primary
+                                        else
+                                            Color.White
+                                    )
+                                    if (speed == uiState.playbackSpeed) {
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = "✓",
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                onSpeedChange(speed)
+                                showSpeedMenu = false
+                            }
+                        )
+                    }
+                }
+            }
 
             // 音量控制
             Box {
@@ -334,6 +437,61 @@ private fun VideoPlayerBottomControls(
                             )
                         }
                     }
+                }
+            }
+
+            // 更多菜单
+            Box {
+                IconButton(onClick = { showMoreMenu = true }) {
+                    Icon(
+                        imageVector = Icons.Default.MoreVert,
+                        contentDescription = "更多",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                DropdownMenu(
+                    expanded = showMoreMenu,
+                    onDismissRequest = { showMoreMenu = false },
+                    modifier = Modifier.background(Color.Black.copy(alpha = 0.9f))
+                ) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.VideoFile,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = "视频信息", color = Color.White)
+                            }
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            onShowVideoInfo()
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = "设置", color = Color.White)
+                            }
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            onShowSettings()
+                        }
+                    )
                 }
             }
         }
@@ -436,20 +594,182 @@ fun VideoPlayerError(
                 color = Color.White,
                 style = MaterialTheme.typography.titleLarge
             )
-            
+
             Spacer(modifier = Modifier.height(8.dp))
-            
+
             Text(
                 text = errorMessage,
                 color = Color.Gray,
                 style = MaterialTheme.typography.bodyMedium
             )
-            
+
             Spacer(modifier = Modifier.height(16.dp))
-            
+
             Button(onClick = onRetry) {
                 Text(text = "重试")
             }
         }
     }
+}
+
+/**
+ * 视频信息弹窗
+ */
+@Composable
+private fun VideoInfoDialog(
+    videoInfo: VideoInfo?,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "视频信息") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                videoInfo?.let { info ->
+                    InfoRow(label = "时长", value = formatTime(info.duration))
+                    info.bitrate?.let { bitrate ->
+                        InfoRow(label = "码率", value = "${bitrate / 1000} kbps")
+                    }
+                    info.videoCodec?.let { codec ->
+                        InfoRow(label = "视频编码", value = codec)
+                    }
+                    info.audioCodec?.let { codec ->
+                        InfoRow(label = "音频编码", value = codec)
+                    }
+                    info.resolution?.let { resolution ->
+                        InfoRow(label = "分辨率", value = resolution)
+                    }
+                    info.frameRate?.let { fps ->
+                        InfoRow(label = "帧率", value = "${fps} fps")
+                    }
+                    info.mimeType?.let { mime ->
+                        InfoRow(label = "格式", value = mime)
+                    }
+                    if (info.videoUrl.isNotEmpty()) {
+                        InfoRow(
+                            label = "URL",
+                            value = info.videoUrl,
+                            maxLines = 3
+                        )
+                    }
+                } ?: run {
+                    Text(
+                        text = "暂无视频信息",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "关闭")
+            }
+        }
+    )
+}
+
+/**
+ * 信息行组件
+ */
+@Composable
+private fun InfoRow(
+    label: String,
+    value: String,
+    maxLines: Int = 1
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "$label:",
+            color = Color.Gray,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(0.3f)
+        )
+        Text(
+            text = value,
+            color = Color.White,
+            style = MaterialTheme.typography.bodyMedium,
+            maxLines = maxLines,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(0.7f)
+        )
+    }
+}
+
+/**
+ * 播放器设置弹窗
+ */
+@Composable
+private fun PlayerSettingsDialog(
+    seekSeconds: Int,
+    onSeekSecondsChange: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var localSeekSeconds by remember { mutableIntStateOf(seekSeconds) }
+    val seekOptions = listOf(5, 10, 15, 20, 30)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(text = "播放器设置") },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 快进快退秒数设置
+                Text(
+                    text = "快进/快退秒数",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleSmall
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    seekOptions.forEach { seconds ->
+                        FilterChip(
+                            selected = localSeekSeconds == seconds,
+                            onClick = { localSeekSeconds = seconds },
+                            label = { Text(text = "${seconds}秒") },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = Color.White
+                            )
+                        )
+                    }
+                }
+
+                // 预留其他设置位置
+                HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
+
+                Text(
+                    text = "更多设置选项将在后续版本中添加",
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onSeekSecondsChange(localSeekSeconds)
+                    onDismiss()
+                }
+            ) {
+                Text(text = "保存")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(text = "取消")
+            }
+        }
+    )
 }
