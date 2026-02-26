@@ -249,7 +249,11 @@ class FileBrowserViewModel @Inject constructor(
             result.fold(
                 onSuccess = { files ->
                     // 过滤掉当前目录本身（WebDAV可能会返回当前目录）
-                    val filteredFiles = files.filter { it.path != path && it.name.isNotEmpty() }
+                    // 标准化路径比较：统一移除尾部斜杠
+                    val normalizedPath = path.trimEnd('/')
+                    val filteredFiles = files.filter { 
+                        it.path.trimEnd('/') != normalizedPath && it.name.isNotEmpty() 
+                    }
                     // 排序：目录在前，然后按名称排序
                     val sortedFiles = filteredFiles.sortedWith(
                         compareBy<WebDAVResource> { !it.isDirectory }
