@@ -15,6 +15,8 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
@@ -101,6 +103,7 @@ fun VideoPlayerScreen(
                     onSpeedChange = { speed -> viewModel.setPlaybackSpeed(speed) },
                     onShowVideoInfo = { viewModel.toggleVideoInfoDialog(true) },
                     onShowSettings = { viewModel.toggleSettingsDialog(true) },
+                    onToggleFavorite = { viewModel.toggleFavorite(videoUrl, videoTitle) },
                     modifier = Modifier.align(Alignment.BottomStart)
                 )
 
@@ -232,6 +235,7 @@ private fun VideoPlayerBottomControls(
     onSpeedChange: (Float) -> Unit,
     onShowVideoInfo: () -> Unit,
     onShowSettings: () -> Unit,
+    onToggleFavorite: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isSeeking by remember { mutableStateOf(false) }
@@ -456,6 +460,34 @@ private fun VideoPlayerBottomControls(
                     onDismissRequest = { showMoreMenu = false },
                     modifier = Modifier.background(Color.Black.copy(alpha = 0.9f))
                 ) {
+                    // 收藏/取消收藏按钮
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = if (uiState.isFavorite)
+                                        Icons.Default.Favorite
+                                    else
+                                        Icons.Default.FavoriteBorder,
+                                    contentDescription = null,
+                                    tint = if (uiState.isFavorite)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = if (uiState.isFavorite) "取消收藏" else "收藏",
+                                    color = Color.White
+                                )
+                            }
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            onToggleFavorite()
+                        }
+                    )
                     DropdownMenuItem(
                         text = {
                             Row(verticalAlignment = Alignment.CenterVertically) {

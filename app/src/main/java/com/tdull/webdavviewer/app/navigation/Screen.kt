@@ -42,4 +42,9 @@ sealed class Screen(val route: String) {
             return "image?url=$encodedUrl&title=$encodedTitle"
         }
     }
+
+    /**
+     * 收藏列表页面
+     */
+    object Favorites : Screen("favorites")
 }

@@ -14,6 +14,8 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.tdull.webdavviewer.app.data.remote.WebDAVClient
 import com.tdull.webdavviewer.app.data.repository.PlayerSettingsRepository
+import com.tdull.webdavviewer.app.data.repository.FavoritesRepository
+import com.tdull.webdavviewer.app.data.repository.ConfigRepository
 import com.tdull.webdavviewer.app.util.ErrorHandler
 import com.tdull.webdavviewer.app.util.ErrorInfo
 import com.tdull.webdavviewer.app.util.NetworkMonitor
@@ -23,6 +25,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okhttp3.Credentials
@@ -60,7 +63,8 @@ data class VideoPlayerUiState(
     val videoInfo: VideoInfo? = null, // 视频信息
     val showVideoInfoDialog: Boolean = false, // 显示视频信息弹窗
     val showSettingsDialog: Boolean = false, // 显示设置弹窗
-    val showSpeedMenu: Boolean = false // 显示倍速菜单
+    val showSpeedMenu: Boolean = false, // 显示倍速菜单
+    val isFavorite: Boolean = false // 是否已收藏
 )
 
 /**
@@ -73,7 +77,9 @@ class VideoPlayerViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val networkMonitor: NetworkMonitor,
     private val webDAVClient: WebDAVClient,  // 注入 WebDAVClient 用于获取认证信息
-    private val playerSettingsRepository: PlayerSettingsRepository  // 注入播放器设置仓库
+    private val playerSettingsRepository: PlayerSettingsRepository,  // 注入播放器设置仓库
+    private val favoritesRepository: FavoritesRepository,  // 注入收藏仓库
+    private val configRepository: ConfigRepository  // 注入配置仓库
 ) : ViewModel() {
 
     private val _player = MutableStateFlow<ExoPlayer?>(null)
@@ -112,6 +118,71 @@ class VideoPlayerViewModel @Inject constructor(
             playerSettingsRepository.getPlayerSettings().collect { settings ->
                 _uiState.update { it.copy(seekSeconds = settings.seekSeconds) }
             }
+        }
+    }
+
+    /**
+     * 检查视频收藏状态
+     */
+    private fun checkFavoriteStatus(videoUrl: String) {
+        viewModelScope.launch {
+            favoritesRepository.isFavorite(videoUrl).collect { isFavorite ->
+                _uiState.update { it.copy(isFavorite = isFavorite) }
+            }
+        }
+    }
+
+    /**
+     * 切换收藏状态
+     */
+    fun toggleFavorite(videoUrl: String, videoTitle: String) {
+        viewModelScope.launch {
+            // 获取当前服务器配置
+            val currentServer = configRepository.activeServer.first()
+            val favorites = favoritesRepository.favorites.first()
+            val existing = favorites.find { it.videoUrl == videoUrl }
+
+            if (existing != null) {
+                // 已收藏，删除收藏
+                favoritesRepository.removeFavorite(existing.id)
+                _uiState.update { it.copy(isFavorite = false) }
+            } else {
+                // 未收藏，添加收藏
+                val resourcePath = extractResourcePath(videoUrl)
+                val newItem = com.tdull.webdavviewer.app.data.model.FavoriteItem(
+                    videoUrl = videoUrl,
+                    videoTitle = videoTitle.ifEmpty { extractFileNameFromUrl(videoUrl) },
+                    serverId = currentServer?.id ?: "",
+                    resourcePath = resourcePath
+                )
+                favoritesRepository.addFavorite(newItem)
+                _uiState.update { it.copy(isFavorite = true) }
+            }
+        }
+    }
+
+    /**
+     * 从视频URL中提取资源路径
+     */
+    private fun extractResourcePath(videoUrl: String): String {
+        return try {
+            val url = java.net.URL(videoUrl)
+            url.path
+        } catch (e: Exception) {
+            "/"
+        }
+    }
+
+    /**
+     * 从URL中提取文件名
+     */
+    private fun extractFileNameFromUrl(url: String): String {
+        return try {
+            val urlObj = java.net.URL(url)
+            val path = urlObj.path
+            path.substringAfterLast("/")
+        } catch (e: Exception) {
+            "未知视频"
         }
     }
 
@@ -176,6 +247,7 @@ class VideoPlayerViewModel @Inject constructor(
                 _player.value = exoPlayer
                 _uiState.update { it.copy(isLoading = false) }
                 startProgressUpdate() // 启动进度更新
+                checkFavoriteStatus(url) // 检查收藏状态
             } catch (e: Exception) {
                 val errorInfo = ErrorHandler.getErrorInfo(e, application)
                 _uiState.update {
