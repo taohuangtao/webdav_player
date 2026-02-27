@@ -24,9 +24,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.exoplayer.ExoPlayer
@@ -54,6 +59,36 @@ fun VideoPlayerScreen(
     // 初始化播放器
     LaunchedEffect(videoUrl) {
         viewModel.initializePlayer(videoUrl)
+    }
+
+    // 设置状态栏为黑色背景，白色图标和文字
+    val context = LocalContext.current
+    val view = LocalView.current
+    SideEffect {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.statusBarColor = android.graphics.Color.BLACK
+            // 设置状态栏图标和文字为白色（false = 白色图标，适合深色背景）
+            val controller = WindowInsetsControllerCompat(window, view)
+            controller.isAppearanceLightStatusBars = false
+        }
+    }
+
+    // 退出时恢复状态栏设置
+    DisposableEffect(Unit) {
+        onDispose {
+            val window = (context as? android.app.Activity)?.window
+            if (window != null) {
+                WindowCompat.setDecorFitsSystemWindows(window, true)
+                // 恢复默认状态栏颜色（透明，让系统处理）
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                WindowInsetsControllerCompat(window, view).run {
+                    // 恢复为深色图标（true = 深色图标，适合浅色背景）
+                    isAppearanceLightStatusBars = true
+                }
+            }
+        }
     }
 
     // 控制栏显示状态

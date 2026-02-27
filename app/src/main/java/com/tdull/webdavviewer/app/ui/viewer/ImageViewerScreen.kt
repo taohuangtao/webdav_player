@@ -17,7 +17,11 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.unit.toSize
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
@@ -61,6 +65,36 @@ fun ImageViewerScreen(
     
     // 图片尺寸状态（用于计算缩放边界）
     var imageSize by remember { mutableStateOf(Size.Zero) }
+
+    // 设置状态栏为黑色背景，白色图标和文字
+    val context = LocalContext.current
+    val view = LocalView.current
+    SideEffect {
+        val window = (context as? android.app.Activity)?.window
+        if (window != null) {
+            WindowCompat.setDecorFitsSystemWindows(window, false)
+            window.statusBarColor = android.graphics.Color.BLACK
+            // 设置状态栏图标和文字为白色（false = 白色图标，适合深色背景）
+            val controller = WindowInsetsControllerCompat(window, view)
+            controller.isAppearanceLightStatusBars = false
+        }
+    }
+
+    // 退出时恢复状态栏设置
+    DisposableEffect(Unit) {
+        onDispose {
+            val window = (context as? android.app.Activity)?.window
+            if (window != null) {
+                WindowCompat.setDecorFitsSystemWindows(window, true)
+                // 恢复默认状态栏颜色（透明，让系统处理）
+                window.statusBarColor = android.graphics.Color.TRANSPARENT
+                WindowInsetsControllerCompat(window, view).run {
+                    // 恢复为深色图标（true = 深色图标，适合浅色背景）
+                    isAppearanceLightStatusBars = true
+                }
+            }
+        }
+    }
 
     Box(
         modifier = Modifier
