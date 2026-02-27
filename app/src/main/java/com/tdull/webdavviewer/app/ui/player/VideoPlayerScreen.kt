@@ -17,10 +17,11 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.filled.VolumeDown
+import androidx.compose.material.icons.automirrored.filled.VolumeDown
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.VolumeOff
-import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
@@ -101,9 +102,6 @@ fun VideoPlayerScreen(
         }
     }
 
-    // 协程作用域，用于处理返回时的操作
-    val scope = rememberCoroutineScope()
-    
     // 用于跟踪是否正在处理返回操作
     var isHandlingBack by remember { mutableStateOf(false) }
 
@@ -166,7 +164,6 @@ fun VideoPlayerScreen(
                     player = player,
                     viewModel = viewModel,
                     modifier = Modifier.fillMaxSize(),
-                    isPointerPressed = isPointerPressed,
                     onPointerPressedChange = { isPointerPressed = it },
                     onClick = { showControls = !showControls }
                 )
@@ -331,7 +328,6 @@ private fun VideoPlayerView(
     player: ExoPlayer?,
     viewModel: VideoPlayerViewModel,
     modifier: Modifier = Modifier,
-    isPointerPressed: Boolean,
     onPointerPressedChange: (Boolean) -> Unit,
     onClick: () -> Unit
 ) {
@@ -659,9 +655,9 @@ private fun VideoPlayerBottomControls(
                 IconButton(onClick = { showVolumeSlider = !showVolumeSlider }) {
                     Icon(
                         imageVector = when {
-                            uiState.volume <= 0f -> Icons.Default.VolumeOff
-                            uiState.volume < 0.5f -> Icons.Default.VolumeDown
-                            else -> Icons.Default.VolumeUp
+                            uiState.volume <= 0f -> Icons.AutoMirrored.Filled.VolumeOff
+                            uiState.volume < 0.5f -> Icons.AutoMirrored.Filled.VolumeDown
+                            else -> Icons.AutoMirrored.Filled.VolumeUp
                         },
                         contentDescription = "音量",
                         tint = Color.White,

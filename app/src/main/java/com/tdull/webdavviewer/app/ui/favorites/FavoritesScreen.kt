@@ -36,7 +36,6 @@ import java.util.*
 fun FavoritesScreen(
     viewModel: FavoritesViewModel = hiltViewModel(),
     onVideoClick: (String) -> Unit = {},
-    onImageClick: (String) -> Unit = {},
     onNavigateBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -83,9 +82,7 @@ fun FavoritesScreen(
                         onFavoriteClick = { favorite ->
                             handleFavoriteClick(
                                 favorite = favorite,
-                                viewModel = viewModel,
-                                onVideoClick = onVideoClick,
-                                onImageClick = onImageClick
+                                onVideoClick = onVideoClick
                             )
                         },
                         onPreviewClick = { images, index ->
@@ -309,9 +306,7 @@ private fun PreviewImageItem(
  */
 private fun handleFavoriteClick(
     favorite: FavoriteItem,
-    viewModel: FavoritesViewModel,
-    onVideoClick: (String) -> Unit,
-    onImageClick: (String) -> Unit
+    onVideoClick: (String) -> Unit
 ) {
     // 直接使用收藏项中保存的 videoUrl 播放
     onVideoClick(favorite.videoUrl)
@@ -377,7 +372,7 @@ private fun ImagePreviewDialog(
     // 简化实现，显示单张图片预览
     var currentIndex by remember { mutableIntStateOf(initialIndex) }
 
-    AlertDialog(
+    BasicAlertDialog(
         onDismissRequest = onDismiss
     ) {
         Box(

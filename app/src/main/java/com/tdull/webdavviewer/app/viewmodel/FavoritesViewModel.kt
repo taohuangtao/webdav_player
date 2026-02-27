@@ -47,17 +47,6 @@ class FavoritesViewModel @Inject constructor(
     // 路径到服务器ID的映射
     private val _pathServerMap = MutableStateFlow<Map<String, String>>(emptyMap())
 
-    // 收藏状态映射 (videoUrl -> isFavorite)
-    val favoriteStatus: StateFlow<Map<String, Boolean>> = favoritesRepository.favorites
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = emptyList()
-        )
-        .map { favorites ->
-            favorites.associate { it.videoUrl to true }
-        }
-
     init {
         loadFavorites()
     }
@@ -175,15 +164,4 @@ class FavoritesViewModel @Inject constructor(
     fun refresh() {
         loadFavorites()
     }
-}
-
-/**
- * StateFlow 转 Map 的扩展函数
- */
-private fun StateFlow<List<FavoriteItem>>.map(
-    transform: suspend (List<FavoriteItem>) -> Map<String, Boolean>
-): StateFlow<Map<String, Boolean>> {
-    val result = MutableStateFlow<Map<String, Boolean>>(emptyMap())
-    // 这里简化处理，实际可以通过 combine 实现
-    return result.asStateFlow()
 }

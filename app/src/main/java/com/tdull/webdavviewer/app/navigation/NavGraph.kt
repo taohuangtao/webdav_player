@@ -135,9 +135,6 @@ fun AppNavGraph(
                 onVideoClick = { url ->
                     navController.navigate(Screen.VideoPlayer.createRoute(url))
                 },
-                onImageClick = { url ->
-                    navController.navigate(Screen.ImageViewer.createRoute(url))
-                },
                 onNavigateBack = {
                     navController.popBackStack()
                 }
