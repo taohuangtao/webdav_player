@@ -64,7 +64,10 @@ data class VideoPlayerUiState(
     val showVideoInfoDialog: Boolean = false, // 显示视频信息弹窗
     val showSettingsDialog: Boolean = false, // 显示设置弹窗
     val showSpeedMenu: Boolean = false, // 显示倍速菜单
-    val isFavorite: Boolean = false // 是否已收藏
+    val isFavorite: Boolean = false, // 是否已收藏
+    val isInFastForward: Boolean = false, // 是否处于临时倍速播放状态（长按）
+    val fastForwardSpeed: Float = 3f, // 临时倍速播放速度
+    val originalPlaybackSpeed: Float = 1f // 临时倍速前的原始播放速度
 )
 
 /**
@@ -427,10 +430,56 @@ class VideoPlayerViewModel @Inject constructor(
      * 设置播放速度
      */
     fun setPlaybackSpeed(speed: Float) {
-        _player.value?.setPlaybackSpeed(speed)
+        val player = _player.value
+        android.util.Log.d("VideoPlayer", "setPlaybackSpeed: player=${player != null}, speed=$speed")
+        player?.setPlaybackSpeed(speed)
+        android.util.Log.d("VideoPlayer", "setPlaybackSpeed after: currentSpeed=${player?.playbackParameters?.speed}")
         _uiState.update { it.copy(playbackSpeed = speed, showSpeedMenu = false) }
         viewModelScope.launch {
             playerSettingsRepository.savePlaybackSpeed(speed)
+        }
+    }
+
+    /**
+     * 开始临时倍速播放（长按触发）
+     */
+    fun startFastForward() {
+        val state = _uiState.value
+        if (!state.isInFastForward) {
+            val player = _player.value
+            android.util.Log.d("VideoPlayer", "startFastForward: player=${player != null}, speed=${state.fastForwardSpeed}")
+            // 先保存原始速度，再设置倍速
+            _uiState.update {
+                it.copy(
+                    isInFastForward = true,
+                    originalPlaybackSpeed = it.playbackSpeed
+                )
+            }
+            // 确保在主线程调用 setPlaybackSpeed
+            player?.setPlaybackSpeed(state.fastForwardSpeed)
+            android.util.Log.d("VideoPlayer", "startFastForward: currentSpeed=${player?.playbackParameters?.speed}")
+        }
+    }
+
+    /**
+     * 结束临时倍速播放（松手触发）
+     */
+    fun endFastForward() {
+        val state = _uiState.value
+        if (state.isInFastForward) {
+            // 先更新状态，再恢复原始速度
+            val originalSpeed = state.originalPlaybackSpeed
+            val player = _player.value
+            android.util.Log.d("VideoPlayer", "endFastForward: player=${player != null}, speed=$originalSpeed")
+            _uiState.update {
+                it.copy(
+                    isInFastForward = false,
+                    playbackSpeed = originalSpeed
+                )
+            }
+            // 确保在主线程调用 setPlaybackSpeed
+            player?.setPlaybackSpeed(originalSpeed)
+            android.util.Log.d("VideoPlayer", "endFastForward: currentSpeed=${player?.playbackParameters?.speed}")
         }
     }
 

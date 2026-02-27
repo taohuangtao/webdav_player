@@ -2,8 +2,11 @@ package com.tdull.webdavviewer.app.ui.player
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FastForward
@@ -93,11 +96,27 @@ fun VideoPlayerScreen(
     // 控制栏显示状态
     var showControls by remember { mutableStateOf(true) }
 
+    // 长按状态跟踪
+    var isPointerPressed by remember { mutableStateOf(false) }
+
     // 自动隐藏控制栏
     LaunchedEffect(showControls, uiState.isPlaying) {
         if (showControls && uiState.isPlaying) {
             delay(3000)
             showControls = false
+        }
+    }
+
+    // 处理长按3秒后激活倍速播放
+    LaunchedEffect(isPointerPressed) {
+        if (isPointerPressed && !uiState.isInFastForward) {
+            delay(3000)
+            // 再次检查是否仍在按下状态
+            if (isPointerPressed) {
+                viewModel.startFastForward()
+            }
+        } else if (!isPointerPressed && uiState.isInFastForward) {
+            viewModel.endFastForward()
         }
     }
 
@@ -112,7 +131,19 @@ fun VideoPlayerScreen(
                 VideoPlayerView(
                     player = exoPlayer,
                     modifier = Modifier.fillMaxSize(),
+                    isPointerPressed = isPointerPressed,
+                    onPointerPressedChange = { isPointerPressed = it },
                     onClick = { showControls = !showControls }
+                )
+            }
+
+            // 3x倍速播放提示
+            if (uiState.isInFastForward) {
+                FastForwardIndicator(
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .statusBarsPadding()
+                        .padding(top = 16.dp)
                 )
             }
 
@@ -178,14 +209,42 @@ fun VideoPlayerScreen(
 }
 
 /**
+ * 3x倍速播放提示
+ */
+@Composable
+private fun FastForwardIndicator(
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(
+                color = Color.Black.copy(alpha = 0.7f),
+                shape = MaterialTheme.shapes.medium
+            )
+            .padding(horizontal = 24.dp, vertical = 12.dp)
+    ) {
+        Text(
+            text = "3x",
+            color = MaterialTheme.colorScheme.primary,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        )
+    }
+}
+
+/**
  * ExoPlayer 视图
  */
 @Composable
 private fun VideoPlayerView(
     player: ExoPlayer,
     modifier: Modifier = Modifier,
+    isPointerPressed: Boolean,
+    onPointerPressedChange: (Boolean) -> Unit,
     onClick: () -> Unit
 ) {
+    var pressStartTime by remember { mutableLongStateOf(0L) }
+
     AndroidView(
         factory = { ctx ->
             PlayerView(ctx).apply {
@@ -197,10 +256,40 @@ private fun VideoPlayerView(
                 )
             }
         },
-        modifier = modifier.clickable(
-            interactionSource = remember { MutableInteractionSource() },
-            indication = null
-        ) { onClick() },
+        modifier = modifier
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    // 按下事件
+                    val downEvent = awaitPointerEvent()
+                    val downChange = downEvent.changes.firstOrNull()
+                    if (downChange != null) {
+                        pressStartTime = System.currentTimeMillis()
+                        onPointerPressedChange(true)
+                        downChange.consume()
+
+                        // 等待抬起事件
+                        var isPressed = true
+                        while (isPressed) {
+                            val event = awaitPointerEvent()
+                            val changes = event.changes
+
+                            // 检查是否有手指抬起
+                            val hasUp = changes.any { !it.pressed }
+                            if (hasUp) {
+                                val pressDuration = System.currentTimeMillis() - pressStartTime
+                                onPointerPressedChange(false)
+                                changes.forEach { it.consume() }
+                                isPressed = false
+
+                                // 如果按下时间短于3秒，触发点击事件
+                                if (pressDuration < 3000) {
+                                    onClick()
+                                }
+                            }
+                        }
+                    }
+                }
+            },
         update = { playerView ->
             playerView.player = player
         }
