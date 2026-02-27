@@ -81,12 +81,19 @@ class FileBrowserViewModel @Inject constructor(
 
     /**
      * 根据服务器ID选择服务器
+     * 如果已经连接到该服务器，则不执行任何操作（保留当前浏览状态）
      */
     fun selectServerById(serverId: String) {
         viewModelScope.launch {
             val server = configRepository.servers.first()
                 .find { it.id == serverId }
-            server?.let { selectServer(it) }
+            server?.let {
+                // 如果已经连接到同一个服务器，则跳过（保持当前浏览状态）
+                if (currentServerConfig?.id == it.id && _uiState.value.isConnected) {
+                    return@launch
+                }
+                selectServer(it)
+            }
         }
     }
 
@@ -94,6 +101,12 @@ class FileBrowserViewModel @Inject constructor(
      * 选择服务器并连接
      */
     fun selectServer(config: ServerConfig) {
+        // 如果是同一个服务器且已连接，则不重复连接（保持当前浏览状态）
+        val isSameServer = currentServerConfig?.id == config.id
+        if (isSameServer && _uiState.value.isConnected) {
+            return
+        }
+
         // 先检查网络状态
         if (!networkMonitor.isNetworkAvailable()) {
             _uiState.update {
@@ -114,29 +127,32 @@ class FileBrowserViewModel @Inject constructor(
 
         currentServerConfig = config
         _uiState.update { it.copy(currentServer = config) }
-        
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, errorInfo = null) }
-            
+
             val result = webDavRepository.connect(config)
-            
+
             result.fold(
                 onSuccess = {
                     _uiState.update { it.copy(isConnected = true, isLoading = false) }
-                    // 连接成功后加载根目录
-                    _currentPath.value = "/"
-                    pathStack.clear()
-                    loadFiles("/")
+                    // 只有首次连接或切换服务器时才重置到根目录
+                    // 如果是同一服务器的重复连接（如网络中断后重连），保持当前浏览状态
+                    if (!isSameServer) {
+                        _currentPath.value = "/"
+                        pathStack.clear()
+                        loadFiles("/")
+                    }
                 },
                 onFailure = { error ->
                     val errorInfo = ErrorHandler.getErrorInfo(error, application)
-                    _uiState.update { 
+                    _uiState.update {
                         it.copy(
-                            isConnected = false, 
+                            isConnected = false,
                             isLoading = false,
                             errorInfo = errorInfo,
                             error = errorInfo.message
-                        ) 
+                        )
                     }
                 }
             )
