@@ -35,6 +35,7 @@ fun FileBrowserScreen(
     val uiState by viewModel.uiState.collectAsState()
     val currentPath by viewModel.currentPath.collectAsState()
     val videoPreviews by viewModel.videoPreviews.collectAsState()
+    val favoriteStates by viewModel.favoriteStates.collectAsState()
     
     // 全屏预览图状态
     var previewState by remember { mutableStateOf<PreviewState?>(null) }
@@ -42,6 +43,13 @@ fun FileBrowserScreen(
     // 初始化服务器连接
     LaunchedEffect(serverId) {
         serverId?.let { viewModel.selectServerById(it) }
+    }
+    
+    // 文件列表变化时加载收藏状态
+    LaunchedEffect(uiState.files) {
+        if (uiState.files.isNotEmpty()) {
+            viewModel.loadFavoriteStates(uiState.files.map { it.path })
+        }
     }
     
     Scaffold(
@@ -120,6 +128,7 @@ fun FileBrowserScreen(
                     FileList(
                         files = uiState.files,
                         videoPreviews = videoPreviews,
+                        favoriteStates = favoriteStates,
                         onFileClick = { resource ->
                             handleFileClick(
                                 resource = resource,
@@ -133,6 +142,9 @@ fun FileBrowserScreen(
                         },
                         onLoadPreviews = { path ->
                             viewModel.loadVideoPreviews(path)
+                        },
+                        onToggleFavorite = { resource ->
+                            viewModel.toggleFavorite(resource)
                         }
                     )
                 }
@@ -165,9 +177,11 @@ private data class PreviewState(
 private fun FileList(
     files: List<WebDAVResource>,
     videoPreviews: Map<String, List<String>>,
+    favoriteStates: Map<String, Boolean>,
     onFileClick: (WebDAVResource) -> Unit,
     onPreviewClick: (List<String>, Int) -> Unit,
-    onLoadPreviews: (String) -> Unit
+    onLoadPreviews: (String) -> Unit,
+    onToggleFavorite: (WebDAVResource) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -189,7 +203,9 @@ private fun FileList(
                 onClick = { onFileClick(resource) },
                 previewImages = previews,
                 onPreviewClick = onPreviewClick,
-                onLoadPreviews = { onLoadPreviews(resource.path) }
+                onLoadPreviews = { onLoadPreviews(resource.path) },
+                isFavorite = favoriteStates[resource.path] ?: false,
+                onFavoriteClick = { onToggleFavorite(resource) }
             )
         }
     }

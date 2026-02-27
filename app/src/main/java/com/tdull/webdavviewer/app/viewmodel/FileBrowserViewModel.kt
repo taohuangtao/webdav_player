@@ -3,10 +3,12 @@ package com.tdull.webdavviewer.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.data.model.ServerConfig
 import com.tdull.webdavviewer.app.data.model.WebDAVException
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.data.repository.ConfigRepository
+import com.tdull.webdavviewer.app.data.repository.FavoritesRepository
 import com.tdull.webdavviewer.app.data.repository.WebDAVRepository
 import com.tdull.webdavviewer.app.util.ErrorHandler
 import com.tdull.webdavviewer.app.util.ErrorInfo
@@ -43,7 +45,8 @@ class FileBrowserViewModel @Inject constructor(
     private val application: Application,
     private val webDavRepository: WebDAVRepository,
     private val configRepository: ConfigRepository,
-    private val networkMonitor: NetworkMonitor
+    private val networkMonitor: NetworkMonitor,
+    private val favoritesRepository: FavoritesRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FileBrowserUiState())
@@ -61,6 +64,10 @@ class FileBrowserViewModel @Inject constructor(
     // 视频预览图缓存：Map<视频路径, 预览图URL列表>
     private val _videoPreviews = MutableStateFlow<Map<String, List<String>>>(emptyMap())
     val videoPreviews: StateFlow<Map<String, List<String>>> = _videoPreviews.asStateFlow()
+    
+    // 收藏状态：Map<资源路径, 是否收藏>
+    private val _favoriteStates = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val favoriteStates: StateFlow<Map<String, Boolean>> = _favoriteStates.asStateFlow()
 
     // 激活的服务器
     val activeServer: StateFlow<ServerConfig?> = configRepository.activeServer
@@ -321,5 +328,51 @@ class FileBrowserViewModel @Inject constructor(
      */
     fun clearError() {
         _uiState.update { it.copy(error = null, errorInfo = null) }
+    }
+    
+    /**
+     * 切换收藏状态
+     */
+    fun toggleFavorite(resource: WebDAVResource) {
+        val serverId = currentServerConfig?.id ?: return
+        val videoUrl = webDavRepository.getStreamUrl(resource.path)
+        val isCurrentlyFavorite = _favoriteStates.value[resource.path] ?: false
+        
+        viewModelScope.launch {
+            if (isCurrentlyFavorite) {
+                // 取消收藏
+                val favorites = favoritesRepository.favorites.first()
+                val existing = favorites.find { it.videoUrl == videoUrl }
+                existing?.let { 
+                    favoritesRepository.removeFavorite(it.id)
+                    _favoriteStates.update { it - resource.path }
+                }
+            } else {
+                // 添加收藏
+                val newItem = FavoriteItem(
+                    videoUrl = videoUrl,
+                    videoTitle = resource.name,
+                    serverId = serverId,
+                    resourcePath = resource.path
+                )
+                favoritesRepository.addFavorite(newItem)
+                _favoriteStates.update { it + (resource.path to true) }
+            }
+        }
+    }
+    
+    /**
+     * 检查并加载收藏状态
+     */
+    fun loadFavoriteStates(paths: List<String>) {
+        viewModelScope.launch {
+            val favorites = favoritesRepository.favorites.first()
+            val favoritePaths = favorites.map { it.resourcePath }.toSet()
+            val newStates = _favoriteStates.value.toMutableMap()
+            paths.forEach { path ->
+                newStates[path] = favoritePaths.contains(path)
+            }
+            _favoriteStates.value = newStates
+        }
     }
 }
