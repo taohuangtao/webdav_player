@@ -152,3 +152,7 @@ data class WebDAVResource(
 - `android:usesCleartextTraffic="true"` 已启用，支持 HTTP WebDAV 服务器
 - INTERNET 和 ACCESS_NETWORK_STATE 权限
 - 单 MainActivity，带启动 intent
+
+## 额外说明
+
+- 每次修改代码后需要解决编译错误和编译警告（编译命令 `./gradlew assembleDebug`）

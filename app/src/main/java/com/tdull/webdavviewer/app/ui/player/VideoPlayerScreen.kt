@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material.icons.Icons
@@ -109,10 +110,10 @@ fun VideoPlayerScreen(
 
     // 处理长按3秒后激活倍速播放
     LaunchedEffect(isPointerPressed) {
-        if (isPointerPressed && !uiState.isInFastForward) {
+        if (isPointerPressed && !uiState.isInFastForward && !uiState.isDragSeeking) {
             delay(3000)
-            // 再次检查是否仍在按下状态
-            if (isPointerPressed) {
+            // 再次检查是否仍在按下状态且没有开始拖动进度调整
+            if (isPointerPressed && !uiState.isDragSeeking) {
                 viewModel.startFastForward()
             }
         } else if (!isPointerPressed && uiState.isInFastForward) {
@@ -130,6 +131,7 @@ fun VideoPlayerScreen(
             player?.let { exoPlayer ->
                 VideoPlayerView(
                     player = exoPlayer,
+                    viewModel = viewModel,
                     modifier = Modifier.fillMaxSize(),
                     isPointerPressed = isPointerPressed,
                     onPointerPressedChange = { isPointerPressed = it },
@@ -144,6 +146,14 @@ fun VideoPlayerScreen(
                         .align(Alignment.TopCenter)
                         .statusBarsPadding()
                         .padding(top = 16.dp)
+                )
+            }
+
+            // 拖动进度调整提示
+            if (uiState.isDragSeeking) {
+                DragSeekIndicator(
+                    offsetMs = uiState.dragSeekOffset,
+                    modifier = Modifier.align(Alignment.Center)
                 )
             }
 
@@ -233,17 +243,68 @@ private fun FastForwardIndicator(
 }
 
 /**
+ * 拖动进度调整提示
+ */
+@Composable
+private fun DragSeekIndicator(
+    offsetMs: Long,
+    modifier: Modifier = Modifier
+) {
+    val offsetSeconds = offsetMs / 1000
+    val isForward = offsetSeconds > 0
+    val absSeconds = kotlin.math.abs(offsetSeconds)
+    
+    val text = when {
+        isForward -> "+${absSeconds}秒"
+        else -> "-${absSeconds}秒"
+    }
+
+    val icon = if (isForward) {
+        Icons.Default.FastForward
+    } else {
+        Icons.Default.FastRewind
+    }
+
+    Row(
+        modifier = modifier
+            .background(
+                color = Color.Black.copy(alpha = 0.8f),
+                shape = MaterialTheme.shapes.large
+            )
+            .padding(horizontal = 32.dp, vertical = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(32.dp)
+        )
+        Text(
+            text = text,
+            color = Color.White,
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = androidx.compose.ui.text.font.FontWeight.Bold
+        )
+    }
+}
+
+/**
  * ExoPlayer 视图
  */
 @Composable
 private fun VideoPlayerView(
     player: ExoPlayer,
+    viewModel: VideoPlayerViewModel,
     modifier: Modifier = Modifier,
     isPointerPressed: Boolean,
     onPointerPressedChange: (Boolean) -> Unit,
     onClick: () -> Unit
 ) {
     var pressStartTime by remember { mutableLongStateOf(0L) }
+    var dragStartX by remember { mutableFloatStateOf(0f) }
+    var isDragSeekActivated by remember { mutableStateOf(false) }
 
     AndroidView(
         factory = { ctx ->
@@ -264,26 +325,54 @@ private fun VideoPlayerView(
                     val downChange = downEvent.changes.firstOrNull()
                     if (downChange != null) {
                         pressStartTime = System.currentTimeMillis()
+                        dragStartX = downChange.position.x
+                        isDragSeekActivated = false
                         onPointerPressedChange(true)
                         downChange.consume()
 
-                        // 等待抬起事件
+                        // 等待抬起或拖动事件
                         var isPressed = true
                         while (isPressed) {
                             val event = awaitPointerEvent()
                             val changes = event.changes
 
                             // 检查是否有手指抬起
-                            val hasUp = changes.any { !it.pressed }
-                            if (hasUp) {
+                            val upChange = changes.firstOrNull { !it.pressed }
+                            if (upChange != null) {
                                 val pressDuration = System.currentTimeMillis() - pressStartTime
                                 onPointerPressedChange(false)
                                 changes.forEach { it.consume() }
                                 isPressed = false
 
-                                // 如果按下时间短于3秒，触发点击事件
-                                if (pressDuration < 3000) {
+                                // 如果处于拖动进度调整模式，执行 seek
+                                if (isDragSeekActivated) {
+                                    viewModel.endDragSeek()
+                                } else if (pressDuration < 3000) {
+                                    // 如果按下时间短于3秒且没有拖动，触发点击事件
                                     onClick()
+                                }
+                            } else {
+                                // 检查拖动
+                                val moveChange = changes.firstOrNull { it.pressed }
+                                if (moveChange != null) {
+                                    val currentX = moveChange.position.x
+                                    val dragDistance = currentX - dragStartX
+                                    val absDragDistance = kotlin.math.abs(dragDistance)
+
+                                    // 如果拖动距离超过20像素，激活拖动进度调整
+                                    if (absDragDistance > 20) {
+                                        if (!isDragSeekActivated) {
+                                            isDragSeekActivated = true
+                                            viewModel.startDragSeek()
+                                        }
+
+                                        // 计算偏移量：5像素 = 1秒
+                                        val offsetSeconds = (dragDistance / 5f).toLong()
+                                        val offsetMs = offsetSeconds * 1000
+                                        viewModel.updateDragSeek(offsetMs)
+                                    }
+
+                                    moveChange.consume()
                                 }
                             }
                         }

@@ -67,7 +67,9 @@ data class VideoPlayerUiState(
     val isFavorite: Boolean = false, // 是否已收藏
     val isInFastForward: Boolean = false, // 是否处于临时倍速播放状态（长按）
     val fastForwardSpeed: Float = 3f, // 临时倍速播放速度
-    val originalPlaybackSpeed: Float = 1f // 临时倍速前的原始播放速度
+    val originalPlaybackSpeed: Float = 1f, // 临时倍速前的原始播放速度
+    val isDragSeeking: Boolean = false, // 是否处于拖动进度调整状态
+    val dragSeekOffset: Long = 0L // 拖动进度调整的偏移量（毫秒）
 )
 
 /**
@@ -490,6 +492,36 @@ class VideoPlayerViewModel @Inject constructor(
         _uiState.update { it.copy(seekSeconds = seconds) }
         viewModelScope.launch {
             playerSettingsRepository.saveSeekSeconds(seconds)
+        }
+    }
+
+    /**
+     * 开始拖动进度调整
+     */
+    fun startDragSeek() {
+        _uiState.update { it.copy(isDragSeeking = true, dragSeekOffset = 0L) }
+    }
+
+    /**
+     * 更新拖动进度偏移
+     * @param offsetMs 偏移量（毫秒），正数为快进，负数为快退
+     */
+    fun updateDragSeek(offsetMs: Long) {
+        _uiState.update { it.copy(dragSeekOffset = offsetMs) }
+    }
+
+    /**
+     * 结束拖动进度调整并执行 seek
+     */
+    fun endDragSeek() {
+        val state = _uiState.value
+        if (state.isDragSeeking) {
+            _player.value?.let { player ->
+                val newPosition = player.currentPosition + state.dragSeekOffset
+                val duration = player.duration
+                player.seekTo(newPosition.coerceIn(0L, duration))
+            }
+            _uiState.update { it.copy(isDragSeeking = false, dragSeekOffset = 0L) }
         }
     }
 
