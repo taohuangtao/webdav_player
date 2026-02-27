@@ -585,7 +585,7 @@ private fun VideoProgressSlider(
         valueRange = 0f..1f,
         modifier = Modifier
             .fillMaxWidth()
-            .height(24.dp),
+            .height(48.dp),
         colors = SliderDefaults.colors(
             thumbColor = MaterialTheme.colorScheme.primary,
             activeTrackColor = MaterialTheme.colorScheme.primary,
