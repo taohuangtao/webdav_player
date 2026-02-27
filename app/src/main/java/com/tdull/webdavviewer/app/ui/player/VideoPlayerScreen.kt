@@ -5,9 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.runtime.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FastForward
@@ -24,7 +22,7 @@ import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -33,6 +31,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.activity.compose.BackHandler
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -46,6 +45,7 @@ import com.tdull.webdavviewer.app.viewmodel.VideoPlayerViewModel
 import com.tdull.webdavviewer.app.viewmodel.VideoPlayerUiState
 import com.tdull.webdavviewer.app.viewmodel.VideoInfo
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * 视频播放器界面
@@ -94,6 +94,39 @@ fun VideoPlayerScreen(
         }
     }
 
+    // 页面退出时释放播放器，避免视频画面残留
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.releasePlayer()
+        }
+    }
+
+    // 协程作用域，用于处理返回时的操作
+    val scope = rememberCoroutineScope()
+    
+    // 用于跟踪是否正在处理返回操作
+    var isHandlingBack by remember { mutableStateOf(false) }
+
+    // 处理返回操作：先释放播放器再返回，避免画面残留
+    val handleBack: () -> Unit = {
+        if (!isHandlingBack) {
+            isHandlingBack = true
+            viewModel.releasePlayer()
+        }
+    }
+    
+    // 监听 player 状态，当 player 为 null 且正在处理返回时，执行页面返回
+    LaunchedEffect(player, isHandlingBack) {
+        if (player == null && isHandlingBack) {
+            // player 已释放，等待一帧确保 UI 更新完成
+            delay(50)
+            onBack()
+        }
+    }
+
+    // 拦截系统返回键
+    BackHandler(onBack = handleBack)
+
     // 控制栏显示状态
     var showControls by remember { mutableStateOf(true) }
 
@@ -127,10 +160,10 @@ fun VideoPlayerScreen(
                 .fillMaxSize()
                 .background(Color.Black)
         ) {
-            // 视频播放器视图
-            player?.let { exoPlayer ->
+            // 视频播放器视图 - 当正在处理返回时不渲染，彻底移除 PlayerView 避免画面残留
+            if (!isHandlingBack && player != null) {
                 VideoPlayerView(
-                    player = exoPlayer,
+                    player = player,
                     viewModel = viewModel,
                     modifier = Modifier.fillMaxSize(),
                     isPointerPressed = isPointerPressed,
@@ -162,7 +195,7 @@ fun VideoPlayerScreen(
                 // 顶部控制栏
                 VideoPlayerTopControls(
                     title = videoTitle,
-                    onBack = onBack,
+                    onBack = handleBack,
                     modifier = Modifier.align(Alignment.TopStart)
                 )
 
@@ -295,7 +328,7 @@ private fun DragSeekIndicator(
  */
 @Composable
 private fun VideoPlayerView(
-    player: ExoPlayer,
+    player: ExoPlayer?,
     viewModel: VideoPlayerViewModel,
     modifier: Modifier = Modifier,
     isPointerPressed: Boolean,
@@ -380,9 +413,31 @@ private fun VideoPlayerView(
                 }
             },
         update = { playerView ->
-            playerView.player = player
+            if (player == null) {
+                // player 为 null 时，彻底清除 PlayerView 的画面和状态
+                playerView.player = null
+                // 清除 Surface 上的画面
+                playerView.clearCanvas()
+            } else {
+                playerView.player = player
+            }
+        },
+        onRelease = { playerView ->
+            // AndroidView 被释放时，彻底清理 PlayerView
+            playerView.player = null
+            playerView.clearCanvas()
         }
     )
+}
+
+/**
+ * 清除 PlayerView 的画面
+ */
+private fun PlayerView.clearCanvas() {
+    // 设置一个空的 player 来清除画面
+    this.player = null
+    // 强制刷新视图
+    this.invalidate()
 }
 
 /**

@@ -580,6 +580,15 @@ class VideoPlayerViewModel @Inject constructor(
             // 保存播放状态
             _playWhenReady.value = player.playWhenReady
             
+            // 暂停播放
+            player.pause()
+            
+            // 清除媒体项，确保没有内容渲染
+            player.clearMediaItems()
+            
+            // 先停止播放器，清空画面和缓冲，避免画面残留
+            player.stop()
+            
             // 释放播放器
             player.release()
         }

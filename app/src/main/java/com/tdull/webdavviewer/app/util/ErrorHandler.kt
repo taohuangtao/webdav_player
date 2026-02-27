@@ -63,7 +63,7 @@ object ErrorHandler {
                     else -> ErrorInfo(
                         type = ErrorType.SERVER_UNREACHABLE,
                         title = context.getString(R.string.error_connection_failed_title),
-                        message = throwable.message ?: context.getString(R.string.error_connection_failed_message),
+                        message = throwable.message,
                         canRetry = true
                     )
                 }

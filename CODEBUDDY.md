@@ -156,3 +156,4 @@ data class WebDAVResource(
 ## 额外说明
 
 - 每次修改代码后需要解决编译错误和编译警告（编译命令 `./gradlew assembleDebug`）
+- 注意当前的开发环境是windows11操作系统，在执行命令时需要采用相关支持的命令格式
