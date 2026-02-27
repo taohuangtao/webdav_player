@@ -21,6 +21,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.ui.unit.toSize
 import coil.compose.AsyncImage
@@ -66,30 +67,28 @@ fun ImageViewerScreen(
     // 图片尺寸状态（用于计算缩放边界）
     var imageSize by remember { mutableStateOf(Size.Zero) }
 
-    // 设置状态栏为黑色背景，白色图标和文字
+    // 隐藏状态栏和导航栏，实现全屏沉浸式体验
     val context = LocalContext.current
     val view = LocalView.current
-    SideEffect {
-        val window = (context as? android.app.Activity)?.window
+    val window = (context as? android.app.Activity)?.window
+
+    DisposableEffect(Unit) {
         if (window != null) {
             WindowCompat.setDecorFitsSystemWindows(window, false)
-            window.statusBarColor = android.graphics.Color.BLACK
-            // 设置状态栏图标和文字为白色（false = 白色图标，适合深色背景）
             val controller = WindowInsetsControllerCompat(window, view)
-            controller.isAppearanceLightStatusBars = false
+            // 隐藏状态栏和导航栏
+            controller.hide(
+                WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars()
+            )
+            // 设置系统栏行为：滑动时暂时显示，然后自动隐藏
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
-    }
 
-    // 退出时恢复状态栏设置
-    DisposableEffect(Unit) {
         onDispose {
-            val window = (context as? android.app.Activity)?.window
             if (window != null) {
                 WindowCompat.setDecorFitsSystemWindows(window, true)
-                // 恢复默认状态栏颜色（透明，让系统处理）
-                window.statusBarColor = android.graphics.Color.TRANSPARENT
                 WindowInsetsControllerCompat(window, view).run {
-                    // 恢复为深色图标（true = 深色图标，适合浅色背景）
+                    show(WindowInsetsCompat.Type.statusBars() or WindowInsetsCompat.Type.navigationBars())
                     isAppearanceLightStatusBars = true
                 }
             }
