@@ -163,6 +163,7 @@ fun VideoPlayerScreen(
                 VideoPlayerView(
                     player = player,
                     viewModel = viewModel,
+                    isInFastForward = uiState.isInFastForward,
                     modifier = Modifier.fillMaxSize(),
                     onPointerPressedChange = { isPointerPressed = it },
                     onClick = { showControls = !showControls }
@@ -327,6 +328,7 @@ private fun DragSeekIndicator(
 private fun VideoPlayerView(
     player: ExoPlayer?,
     viewModel: VideoPlayerViewModel,
+    isInFastForward: Boolean,
     modifier: Modifier = Modifier,
     onPointerPressedChange: (Boolean) -> Unit,
     onClick: () -> Unit
@@ -387,9 +389,10 @@ private fun VideoPlayerView(
                                     val currentX = moveChange.position.x
                                     val dragDistance = currentX - dragStartX
                                     val absDragDistance = kotlin.math.abs(dragDistance)
+                                    val currentPressDuration = System.currentTimeMillis() - pressStartTime
 
-                                    // 如果拖动距离超过20像素，激活拖动进度调整
-                                    if (absDragDistance > 20) {
+                                    // 如果拖动距离超过20像素，且不在倍速播放状态，且按压时间少于1秒（避免与长按倍速冲突），激活拖动进度调整
+                                    if (absDragDistance > 20 && !isInFastForward && currentPressDuration < 1000) {
                                         if (!isDragSeekActivated) {
                                             isDragSeekActivated = true
                                             viewModel.startDragSeek()
