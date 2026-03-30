@@ -96,6 +96,19 @@ fun VideoPlayerScreen(
         }
     }
 
+    // 播放时保持屏幕常亮，避免自动息屏
+    DisposableEffect(uiState.isPlaying) {
+        if (window != null && uiState.isPlaying) {
+            window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+
+        onDispose {
+            if (window != null) {
+                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+            }
+        }
+    }
+
     // 页面退出时释放播放器，避免视频画面残留
     // 增加 activity.isChangingConfigurations 检查，防止旋转屏幕时导致播放器被释放并重新从头开始播放
     DisposableEffect(Unit) {
