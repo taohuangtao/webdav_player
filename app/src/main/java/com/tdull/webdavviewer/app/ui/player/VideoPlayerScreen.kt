@@ -6,6 +6,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FastForward
@@ -96,14 +97,18 @@ fun VideoPlayerScreen(
     }
 
     // 页面退出时释放播放器，避免视频画面残留
+    // 增加 activity.isChangingConfigurations 检查，防止旋转屏幕时导致播放器被释放并重新从头开始播放
     DisposableEffect(Unit) {
         onDispose {
-            viewModel.releasePlayer()
+            val activity = context as? android.app.Activity
+            if (activity?.isChangingConfigurations != true) {
+                viewModel.releasePlayer()
+            }
         }
     }
 
     // 用于跟踪是否正在处理返回操作
-    var isHandlingBack by remember { mutableStateOf(false) }
+    var isHandlingBack by rememberSaveable { mutableStateOf(false) }
 
     // 处理返回操作：先释放播放器再返回，避免画面残留
     val handleBack: () -> Unit = {
@@ -126,7 +131,7 @@ fun VideoPlayerScreen(
     BackHandler(onBack = handleBack)
 
     // 控制栏显示状态
-    var showControls by remember { mutableStateOf(true) }
+    var showControls by rememberSaveable { mutableStateOf(true) }
 
     // 长按状态跟踪
     var isPointerPressed by remember { mutableStateOf(false) }
