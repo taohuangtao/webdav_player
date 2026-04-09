@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -33,7 +34,8 @@ import com.tdull.webdavviewer.app.viewmodel.SettingsViewModel
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onNavigateToBrowser: (String) -> Unit = {},
-    onNavigateToFavorites: () -> Unit = {}
+    onNavigateToFavorites: () -> Unit = {},
+    onNavigateToDownloads: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -90,6 +92,40 @@ fun SettingsScreen(
                     Spacer(modifier = Modifier.width(16.dp))
                     Text(
                         text = "我的收藏",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = null,
+                        tint = Color.Gray
+                    )
+                }
+            }
+
+            // 已下载入口
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clickable { onNavigateToDownloads() },
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(40.dp)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Text(
+                        text = "已下载",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.weight(1f))

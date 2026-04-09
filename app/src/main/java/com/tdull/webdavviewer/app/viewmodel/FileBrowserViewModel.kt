@@ -9,7 +9,10 @@ import com.tdull.webdavviewer.app.data.model.WebDAVException
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.data.repository.ConfigRepository
 import com.tdull.webdavviewer.app.data.repository.FavoritesRepository
+import com.tdull.webdavviewer.app.data.repository.DownloadsRepository
 import com.tdull.webdavviewer.app.data.repository.WebDAVRepository
+import com.tdull.webdavviewer.app.service.DownloadManager
+import com.tdull.webdavviewer.app.service.DownloadProgress
 import com.tdull.webdavviewer.app.util.ErrorHandler
 import com.tdull.webdavviewer.app.util.ErrorInfo
 import com.tdull.webdavviewer.app.util.NetworkMonitor
@@ -46,7 +49,9 @@ class FileBrowserViewModel @Inject constructor(
     private val webDavRepository: WebDAVRepository,
     private val configRepository: ConfigRepository,
     private val networkMonitor: NetworkMonitor,
-    private val favoritesRepository: FavoritesRepository
+    private val favoritesRepository: FavoritesRepository,
+    private val downloadsRepository: DownloadsRepository,
+    private val downloadManager: DownloadManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(FileBrowserUiState())
@@ -68,6 +73,13 @@ class FileBrowserViewModel @Inject constructor(
     // 收藏状态：Map<资源路径, 是否收藏>
     private val _favoriteStates = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val favoriteStates: StateFlow<Map<String, Boolean>> = _favoriteStates.asStateFlow()
+
+    // 下载状态：Map<资源路径, 是否已下载>
+    private val _downloadStates = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    val downloadStates: StateFlow<Map<String, Boolean>> = _downloadStates.asStateFlow()
+
+    // 下载进度：Map<资源路径, 进度信息>
+    val downloadProgress: StateFlow<Map<String, DownloadProgress>> = downloadManager.downloadProgress
 
     // 激活的服务器
     val activeServer: StateFlow<ServerConfig?> = configRepository.activeServer
@@ -373,6 +385,42 @@ class FileBrowserViewModel @Inject constructor(
                 newStates[path] = favoritePaths.contains(path)
             }
             _favoriteStates.value = newStates
+        }
+    }
+
+    /**
+     * 检查并加载下载状态
+     */
+    fun loadDownloadStates(paths: List<String>) {
+        viewModelScope.launch {
+            val downloads = downloadsRepository.downloads.first()
+            val downloadedPaths = downloads.map { it.resourcePath }.toSet()
+            val newStates = _downloadStates.value.toMutableMap()
+            paths.forEach { path ->
+                newStates[path] = downloadedPaths.contains(path)
+            }
+            _downloadStates.value = newStates
+        }
+    }
+
+    /**
+     * 开始下载视频文件
+     */
+    fun startDownload(resource: WebDAVResource) {
+        val serverId = currentServerConfig?.id ?: return
+
+        // 检查是否已在下载中
+        val currentProgress = downloadProgress.value[resource.path]
+        if (currentProgress?.isDownloading == true) {
+            return
+        }
+
+        viewModelScope.launch {
+            downloadManager.startDownload(resource, serverId)
+                .onSuccess {
+                    // 更新下载状态
+                    _downloadStates.update { it + (resource.path to true) }
+                }
         }
     }
 }

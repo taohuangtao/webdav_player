@@ -36,6 +36,7 @@ fun FileBrowserScreen(
     val currentPath by viewModel.currentPath.collectAsState()
     val videoPreviews by viewModel.videoPreviews.collectAsState()
     val favoriteStates by viewModel.favoriteStates.collectAsState()
+    val downloadStates by viewModel.downloadStates.collectAsState()
     
     // 全屏预览图状态
     var previewState by remember { mutableStateOf<PreviewState?>(null) }
@@ -45,10 +46,11 @@ fun FileBrowserScreen(
         serverId?.let { viewModel.selectServerById(it) }
     }
     
-    // 文件列表变化时加载收藏状态
+    // 文件列表变化时加载收藏状态和下载状态
     LaunchedEffect(uiState.files) {
         if (uiState.files.isNotEmpty()) {
             viewModel.loadFavoriteStates(uiState.files.map { it.path })
+            viewModel.loadDownloadStates(uiState.files.map { it.path })
         }
     }
     
@@ -129,6 +131,7 @@ fun FileBrowserScreen(
                         files = uiState.files,
                         videoPreviews = videoPreviews,
                         favoriteStates = favoriteStates,
+                        downloadStates = downloadStates,
                         onFileClick = { resource ->
                             handleFileClick(
                                 resource = resource,
@@ -145,6 +148,9 @@ fun FileBrowserScreen(
                         },
                         onToggleFavorite = { resource ->
                             viewModel.toggleFavorite(resource)
+                        },
+                        onDownloadClick = { resource ->
+                            viewModel.startDownload(resource)
                         }
                     )
                 }
@@ -178,10 +184,12 @@ private fun FileList(
     files: List<WebDAVResource>,
     videoPreviews: Map<String, List<String>>,
     favoriteStates: Map<String, Boolean>,
+    downloadStates: Map<String, Boolean>,
     onFileClick: (WebDAVResource) -> Unit,
     onPreviewClick: (List<String>, Int) -> Unit,
     onLoadPreviews: (String) -> Unit,
-    onToggleFavorite: (WebDAVResource) -> Unit
+    onToggleFavorite: (WebDAVResource) -> Unit,
+    onDownloadClick: (WebDAVResource) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -205,7 +213,9 @@ private fun FileList(
                 onPreviewClick = onPreviewClick,
                 onLoadPreviews = { onLoadPreviews(resource.path) },
                 isFavorite = favoriteStates[resource.path] ?: false,
-                onFavoriteClick = { onToggleFavorite(resource) }
+                onFavoriteClick = { onToggleFavorite(resource) },
+                isDownloaded = downloadStates[resource.path] ?: false,
+                onDownloadClick = { onDownloadClick(resource) }
             )
         }
     }

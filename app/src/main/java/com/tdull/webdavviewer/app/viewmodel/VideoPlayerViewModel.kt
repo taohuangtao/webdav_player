@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
@@ -205,8 +206,11 @@ class VideoPlayerViewModel @Inject constructor(
 
         currentVideoUrl = url
 
-        // 检查网络状态
-        if (!networkMonitor.isNetworkAvailable()) {
+        // 本地文件不需要网络检查
+        val isLocalFile = url.startsWith("file://")
+
+        // 检查网络状态（本地文件跳过）
+        if (!isLocalFile && !networkMonitor.isNetworkAvailable()) {
             _uiState.update {
                 it.copy(
                     isLoading = false,
@@ -226,9 +230,10 @@ class VideoPlayerViewModel @Inject constructor(
             try {
                 _uiState.update { it.copy(isLoading = true, error = null, errorInfo = null) }
 
-                // 创建带有认证的 HttpDataSource.Factory
-                val dataSourceFactory = createHttpDataSourceFactory()
-                
+                // 创建数据源工厂：使用 DefaultDataSource 以支持本地文件和 HTTP 流媒体
+                val httpDataSourceFactory = createHttpDataSourceFactory()
+                val dataSourceFactory = DefaultDataSource.Factory(application, httpDataSourceFactory)
+
                 // 创建 ExoPlayer 实例，配置认证数据源
                 val exoPlayer = ExoPlayer.Builder(application)
                     .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))

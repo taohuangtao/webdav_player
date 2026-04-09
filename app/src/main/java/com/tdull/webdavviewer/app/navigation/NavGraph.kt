@@ -13,6 +13,7 @@ import com.tdull.webdavviewer.app.ui.player.VideoPlayerScreen
 import com.tdull.webdavviewer.app.ui.settings.SettingsScreen
 import com.tdull.webdavviewer.app.ui.viewer.ImageViewerScreen
 import com.tdull.webdavviewer.app.ui.favorites.FavoritesScreen
+import com.tdull.webdavviewer.app.ui.downloads.DownloadsScreen
 import java.net.URLDecoder
 
 /**
@@ -37,6 +38,9 @@ fun AppNavGraph(
                 },
                 onNavigateToFavorites = {
                     navController.navigate(Screen.Favorites.route)
+                },
+                onNavigateToDownloads = {
+                    navController.navigate(Screen.Downloads.route)
                 }
             )
         }
@@ -132,6 +136,18 @@ fun AppNavGraph(
         // 收藏列表页面
         composable(route = Screen.Favorites.route) {
             FavoritesScreen(
+                onVideoClick = { url ->
+                    navController.navigate(Screen.VideoPlayer.createRoute(url))
+                },
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // 下载列表页面
+        composable(route = Screen.Downloads.route) {
+            DownloadsScreen(
                 onVideoClick = { url ->
                     navController.navigate(Screen.VideoPlayer.createRoute(url))
                 },

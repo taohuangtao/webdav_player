@@ -38,6 +38,8 @@ fun FileItem(
     onLoadPreviews: () -> Unit = {},
     isFavorite: Boolean = false,
     onFavoriteClick: () -> Unit = {},
+    isDownloaded: Boolean = false,
+    onDownloadClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val icon = getResourceIcon(resource.resourceType)
@@ -123,19 +125,39 @@ fun FileItem(
                         tint = MaterialTheme.colorScheme.outline
                     )
                 } else {
-                    // 收藏按钮
-                    IconButton(
-                        onClick = onFavoriteClick,
-                        modifier = Modifier.size(40.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = if (isFavorite) Icons.Default.Star else Icons.Outlined.Star,
-                            contentDescription = if (isFavorite) "取消收藏" else "收藏",
-                            tint = if (isFavorite) 
-                                MaterialTheme.colorScheme.primary 
-                            else 
-                                MaterialTheme.colorScheme.outline
-                        )
+                        // 下载按钮（仅视频文件显示）
+                        if (resource.isVideo) {
+                            IconButton(
+                                onClick = onDownloadClick,
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isDownloaded) Icons.Default.Check else Icons.Default.Download,
+                                    contentDescription = if (isDownloaded) "已下载" else "下载",
+                                    tint = if (isDownloaded)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.outline
+                                )
+                            }
+                        }
+                        // 收藏按钮
+                        IconButton(
+                            onClick = onFavoriteClick,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isFavorite) Icons.Default.Star else Icons.Outlined.Star,
+                                contentDescription = if (isFavorite) "取消收藏" else "收藏",
+                                tint = if (isFavorite)
+                                    MaterialTheme.colorScheme.primary
+                                else
+                                    MaterialTheme.colorScheme.outline
+                            )
+                        }
                     }
                 }
             }

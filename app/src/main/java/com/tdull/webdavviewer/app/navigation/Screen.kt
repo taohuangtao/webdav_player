@@ -47,4 +47,9 @@ sealed class Screen(val route: String) {
      * 收藏列表页面
      */
     object Favorites : Screen("favorites")
+
+    /**
+     * 下载列表页面
+     */
+    object Downloads : Screen("downloads")
 }

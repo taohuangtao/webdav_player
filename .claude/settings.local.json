@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./gradlew assembleDebug)"
+      "Bash(./gradlew assembleDebug)",
+      "Bash(bash gradlew:*)",
+      "Bash(powershell.exe -Command \".\\\\gradlew.bat assembleDebug 2>&1 | Select-Object -Last 50\")"
     ]
   }
 }
