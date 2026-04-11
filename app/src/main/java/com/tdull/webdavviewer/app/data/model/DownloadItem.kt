@@ -16,3 +16,14 @@ data class DownloadItem(
     val fileSize: Long,             // 文件大小（字节）
     val downloadedAt: Long = System.currentTimeMillis()  // 下载完成时间
 )
+
+/**
+ * 下载状态
+ * 用于UI层表示下载的各个阶段
+ */
+sealed class DownloadState {
+    data object NotDownloaded : DownloadState()
+    data class Downloading(val progressPercent: Int) : DownloadState()
+    data object Downloaded : DownloadState()
+    data class Error(val message: String) : DownloadState()
+}

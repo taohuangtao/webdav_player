@@ -21,6 +21,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.ResourceType
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import java.text.SimpleDateFormat
@@ -38,8 +39,10 @@ fun FileItem(
     onLoadPreviews: () -> Unit = {},
     isFavorite: Boolean = false,
     onFavoriteClick: () -> Unit = {},
-    isDownloaded: Boolean = false,
+    downloadState: DownloadState = DownloadState.NotDownloaded,
     onDownloadClick: () -> Unit = {},
+    onRetryClick: () -> Unit = {},
+    onCancelDownload: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val icon = getResourceIcon(resource.resourceType)
@@ -130,18 +133,63 @@ fun FileItem(
                     ) {
                         // 下载按钮（仅视频文件显示）
                         if (resource.isVideo) {
-                            IconButton(
-                                onClick = onDownloadClick,
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = if (isDownloaded) Icons.Default.Check else Icons.Default.Download,
-                                    contentDescription = if (isDownloaded) "已下载" else "下载",
-                                    tint = if (isDownloaded)
-                                        MaterialTheme.colorScheme.primary
-                                    else
-                                        MaterialTheme.colorScheme.outline
-                                )
+                            when (downloadState) {
+                                is DownloadState.NotDownloaded -> {
+                                    IconButton(
+                                        onClick = onDownloadClick,
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = "下载",
+                                            tint = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+                                }
+                                is DownloadState.Downloading -> {
+                                    Box(
+                                        contentAlignment = Alignment.Center,
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .clickable(onClick = onCancelDownload)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            progress = { downloadState.progressPercent / 100f },
+                                            modifier = Modifier.size(36.dp),
+                                            strokeWidth = 3.dp,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            text = "${downloadState.progressPercent}%",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                is DownloadState.Downloaded -> {
+                                    IconButton(
+                                        onClick = onDownloadClick,
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "已下载",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                                is DownloadState.Error -> {
+                                    IconButton(
+                                        onClick = onRetryClick,
+                                        modifier = Modifier.size(40.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = "重试下载",
+                                            tint = MaterialTheme.colorScheme.error
+                                        )
+                                    }
+                                }
                             }
                         }
                         // 收藏按钮

@@ -3,6 +3,8 @@ package com.tdull.webdavviewer.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tdull.webdavviewer.app.data.model.DownloadItem
+import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.data.model.ServerConfig
 import com.tdull.webdavviewer.app.data.model.WebDAVException
@@ -74,9 +76,9 @@ class FileBrowserViewModel @Inject constructor(
     private val _favoriteStates = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val favoriteStates: StateFlow<Map<String, Boolean>> = _favoriteStates.asStateFlow()
 
-    // 下载状态：Map<资源路径, 是否已下载>
-    private val _downloadStates = MutableStateFlow<Map<String, Boolean>>(emptyMap())
-    val downloadStates: StateFlow<Map<String, Boolean>> = _downloadStates.asStateFlow()
+    // 下载状态：Map<资源路径, 下载状态>
+    private val _downloadStates = MutableStateFlow<Map<String, DownloadState>>(emptyMap())
+    val downloadStates: StateFlow<Map<String, DownloadState>> = _downloadStates.asStateFlow()
 
     // 下载进度：Map<资源路径, 进度信息>
     val downloadProgress: StateFlow<Map<String, DownloadProgress>> = downloadManager.downloadProgress
@@ -94,6 +96,24 @@ class FileBrowserViewModel @Inject constructor(
         viewModelScope.launch {
             networkMonitor.networkStatus.collect { status ->
                 _uiState.update { it.copy(isNetworkAvailable = status.isAvailable) }
+            }
+        }
+
+        // 监听下载进度，自动更新下载状态
+        viewModelScope.launch {
+            downloadManager.downloadProgress.collect { progressMap ->
+                _downloadStates.update { current ->
+                    val updated = current.toMutableMap()
+                    for ((path, progress) in progressMap) {
+                        updated[path] = when {
+                            progress.isDownloading -> DownloadState.Downloading(progress.progressPercent)
+                            progress.isComplete -> DownloadState.Downloaded
+                            progress.isFailed -> DownloadState.Error(progress.error ?: "下载失败")
+                            else -> updated[path] ?: DownloadState.NotDownloaded
+                        }
+                    }
+                    updated
+                }
             }
         }
     }
@@ -395,11 +415,20 @@ class FileBrowserViewModel @Inject constructor(
         viewModelScope.launch {
             val downloads = downloadsRepository.downloads.first()
             val downloadedPaths = downloads.map { it.resourcePath }.toSet()
-            val newStates = _downloadStates.value.toMutableMap()
-            paths.forEach { path ->
-                newStates[path] = downloadedPaths.contains(path)
+            val progressMap = downloadManager.downloadProgress.value
+            _downloadStates.update { current ->
+                val updated = current.toMutableMap()
+                paths.forEach { path ->
+                    val progress = progressMap[path]
+                    updated[path] = when {
+                        progress?.isDownloading == true -> DownloadState.Downloading(progress.progressPercent)
+                        progress?.isFailed == true -> DownloadState.Error(progress.error ?: "下载失败")
+                        downloadedPaths.contains(path) -> DownloadState.Downloaded
+                        else -> DownloadState.NotDownloaded
+                    }
+                }
+                updated
             }
-            _downloadStates.value = newStates
         }
     }
 
@@ -417,10 +446,22 @@ class FileBrowserViewModel @Inject constructor(
 
         viewModelScope.launch {
             downloadManager.startDownload(resource, serverId)
-                .onSuccess {
-                    // 更新下载状态
-                    _downloadStates.update { it + (resource.path to true) }
-                }
         }
+    }
+
+    /**
+     * 重试下载
+     */
+    fun retryDownload(resourcePath: String) {
+        viewModelScope.launch {
+            downloadManager.retryDownload(resourcePath)
+        }
+    }
+
+    /**
+     * 取消下载
+     */
+    fun cancelDownload(resourcePath: String) {
+        downloadManager.cancelDownload(resourcePath)
     }
 }

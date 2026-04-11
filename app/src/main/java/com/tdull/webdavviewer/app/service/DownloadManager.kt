@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import okhttp3.Credentials
 import okhttp3.OkHttpClient
@@ -37,13 +38,18 @@ data class DownloadProgress(
     val downloadedBytes: Long,
     val isDownloading: Boolean = true,
     val isComplete: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val serverId: String = "",
+    val resource: WebDAVResource? = null
 ) {
     val progress: Float
         get() = if (totalBytes > 0) downloadedBytes.toFloat() / totalBytes else 0f
 
     val progressPercent: Int
         get() = (progress * 100).toInt()
+
+    val isFailed: Boolean
+        get() = !isDownloading && !isComplete && error != null
 }
 
 /**
@@ -62,6 +68,9 @@ class DownloadManager @Inject constructor(
         private const val TAG = "DownloadManager"
         private const val BUFFER_SIZE = 8192
     }
+
+    // 已取消的下载路径
+    private val _cancelledPaths = MutableStateFlow<Set<String>>(emptySet())
 
     // 下载进度状态
     private val _downloadProgress = MutableStateFlow<Map<String, DownloadProgress>>(emptyMap())
@@ -108,15 +117,18 @@ class DownloadManager @Inject constructor(
             Log.d(TAG, "开始下载: $downloadUrl -> ${localFile.absolutePath}")
 
             // 更新进度状态
-            _downloadProgress.value = _downloadProgress.value + (
+            _downloadProgress.update { it + (
                 resource.path to DownloadProgress(
                     resourcePath = resource.path,
                     fileName = resource.name,
                     totalBytes = resource.size,
                     downloadedBytes = 0,
-                    isDownloading = true
+                    isDownloading = true,
+                    serverId = serverId,
+                    resource = resource
                 )
             )
+            }
 
             // 构建带认证的请求
             val request = buildDownloadRequest(downloadUrl, serverConfig)
@@ -125,16 +137,19 @@ class DownloadManager @Inject constructor(
             val response = okHttpClient.newCall(request).execute()
 
             if (!response.isSuccessful) {
-                _downloadProgress.value = _downloadProgress.value + (
+                _downloadProgress.update { it + (
                     resource.path to DownloadProgress(
                         resourcePath = resource.path,
                         fileName = resource.name,
                         totalBytes = resource.size,
                         downloadedBytes = 0,
                         isDownloading = false,
-                        error = "下载失败: HTTP ${response.code}"
+                        error = "下载失败: HTTP ${response.code}",
+                        serverId = serverId,
+                        resource = resource
                     )
                 )
+                }
                 return@withContext Result.failure(Exception("下载失败: HTTP ${response.code}"))
             }
 
@@ -149,19 +164,30 @@ class DownloadManager @Inject constructor(
                 body.byteStream().use { input ->
                     var bytesRead: Int
                     while (input.read(buffer).also { bytesRead = it } != -1) {
+                        // 检查是否已取消
+                        if (_cancelledPaths.value.contains(resource.path)) {
+                            localFile.delete()
+                            _cancelledPaths.update { it - resource.path }
+                            _downloadProgress.update { it - resource.path }
+                            return@withContext Result.failure(Exception("下载已取消"))
+                        }
+
                         output.write(buffer, 0, bytesRead)
                         totalBytesRead += bytesRead
 
                         // 更新进度
-                        _downloadProgress.value = _downloadProgress.value + (
+                        _downloadProgress.update { it + (
                             resource.path to DownloadProgress(
                                 resourcePath = resource.path,
                                 fileName = resource.name,
                                 totalBytes = if (contentLength > 0) contentLength else resource.size,
                                 downloadedBytes = totalBytesRead,
-                                isDownloading = true
+                                isDownloading = true,
+                                serverId = serverId,
+                                resource = resource
                             )
                         )
+                        }
                     }
                 }
             }
@@ -182,16 +208,19 @@ class DownloadManager @Inject constructor(
             downloadsRepository.addDownload(downloadItem)
 
             // 更新进度为完成
-            _downloadProgress.value = _downloadProgress.value + (
+            _downloadProgress.update { it + (
                 resource.path to DownloadProgress(
                     resourcePath = resource.path,
                     fileName = resource.name,
                     totalBytes = localFile.length(),
                     downloadedBytes = localFile.length(),
                     isDownloading = false,
-                    isComplete = true
+                    isComplete = true,
+                    serverId = serverId,
+                    resource = resource
                 )
             )
+            }
 
             Log.d(TAG, "下载完成: ${localFile.absolutePath}")
             Result.success(downloadItem)
@@ -200,16 +229,19 @@ class DownloadManager @Inject constructor(
             Log.e(TAG, "下载失败: ${e.message}", e)
 
             // 更新进度为错误
-            _downloadProgress.value = _downloadProgress.value + (
+            _downloadProgress.update { it + (
                 resource.path to DownloadProgress(
                     resourcePath = resource.path,
                     fileName = resource.name,
                     totalBytes = resource.size,
                     downloadedBytes = 0,
                     isDownloading = false,
-                    error = e.message ?: "下载失败"
+                    error = e.message ?: "下载失败",
+                    serverId = serverId,
+                    resource = resource
                 )
             )
+            }
 
             Result.failure(e)
         }
@@ -307,9 +339,39 @@ class DownloadManager @Inject constructor(
     }
 
     /**
+     * 取消下载
+     */
+    fun cancelDownload(resourcePath: String) {
+        _cancelledPaths.update { it + resourcePath }
+        // 如果下载尚未开始或已完成，直接移除进度
+        val progress = _downloadProgress.value[resourcePath]
+        if (progress != null && !progress.isDownloading) {
+            _downloadProgress.update { it - resourcePath }
+        }
+    }
+
+    /**
+     * 重试下载
+     */
+    suspend fun retryDownload(resourcePath: String): Result<DownloadItem> {
+        val progress = _downloadProgress.value[resourcePath]
+            ?: return Result.failure(Exception("无下载记录"))
+        val resource = progress.resource
+            ?: return Result.failure(Exception("无资源信息"))
+        // 清除旧的进度
+        clearProgress(resourcePath)
+        // 删除部分下载的文件
+        val partialFile = File(downloadDir, resource.name)
+        if (partialFile.exists()) {
+            partialFile.delete()
+        }
+        return startDownload(resource, progress.serverId)
+    }
+
+    /**
      * 清除下载进度
      */
     fun clearProgress(resourcePath: String) {
-        _downloadProgress.value = _downloadProgress.value - resourcePath
+        _downloadProgress.update { it - resourcePath }
     }
 }

@@ -17,6 +17,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import android.util.Log
+import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.viewmodel.FileBrowserViewModel
 
@@ -151,6 +152,12 @@ fun FileBrowserScreen(
                         },
                         onDownloadClick = { resource ->
                             viewModel.startDownload(resource)
+                        },
+                        onRetryDownload = { resource ->
+                            viewModel.retryDownload(resource.path)
+                        },
+                        onCancelDownload = { resource ->
+                            viewModel.cancelDownload(resource.path)
                         }
                     )
                 }
@@ -184,12 +191,14 @@ private fun FileList(
     files: List<WebDAVResource>,
     videoPreviews: Map<String, List<String>>,
     favoriteStates: Map<String, Boolean>,
-    downloadStates: Map<String, Boolean>,
+    downloadStates: Map<String, DownloadState>,
     onFileClick: (WebDAVResource) -> Unit,
     onPreviewClick: (List<String>, Int) -> Unit,
     onLoadPreviews: (String) -> Unit,
     onToggleFavorite: (WebDAVResource) -> Unit,
-    onDownloadClick: (WebDAVResource) -> Unit
+    onDownloadClick: (WebDAVResource) -> Unit,
+    onRetryDownload: (WebDAVResource) -> Unit,
+    onCancelDownload: (WebDAVResource) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -214,8 +223,10 @@ private fun FileList(
                 onLoadPreviews = { onLoadPreviews(resource.path) },
                 isFavorite = favoriteStates[resource.path] ?: false,
                 onFavoriteClick = { onToggleFavorite(resource) },
-                isDownloaded = downloadStates[resource.path] ?: false,
-                onDownloadClick = { onDownloadClick(resource) }
+                downloadState = downloadStates[resource.path] ?: DownloadState.NotDownloaded,
+                onDownloadClick = { onDownloadClick(resource) },
+                onRetryClick = { onRetryDownload(resource) },
+                onCancelDownload = { onCancelDownload(resource) }
             )
         }
     }

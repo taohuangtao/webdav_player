@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.tdull.webdavviewer.app.data.model.DownloadItem
 import com.tdull.webdavviewer.app.data.repository.DownloadsRepository
 import com.tdull.webdavviewer.app.service.DownloadManager
+import com.tdull.webdavviewer.app.service.DownloadProgress
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -45,6 +46,9 @@ class DownloadsViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
+
+    // 正在下载的任务
+    val activeDownloads: StateFlow<Map<String, DownloadProgress>> = downloadManager.downloadProgress
 
     /**
      * 显示删除确认对话框
@@ -130,6 +134,22 @@ class DownloadsViewModel @Inject constructor(
             availableSpace = availableSpace,
             usedByDownloads = usedByDownloads
         )
+    }
+
+    /**
+     * 重试下载
+     */
+    fun retryDownload(resourcePath: String) {
+        viewModelScope.launch {
+            downloadManager.retryDownload(resourcePath)
+        }
+    }
+
+    /**
+     * 取消下载（下载中）或清除失败记录
+     */
+    fun cancelDownload(resourcePath: String) {
+        downloadManager.cancelDownload(resourcePath)
     }
 }
 

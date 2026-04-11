@@ -5,9 +5,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tdull.webdavviewer.app.data.model.DownloadItem
+import com.tdull.webdavviewer.app.service.DownloadProgress
 import com.tdull.webdavviewer.app.viewmodel.DownloadsViewModel
 import java.text.SimpleDateFormat
 import java.util.*
@@ -34,11 +37,12 @@ fun DownloadsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val downloads by viewModel.downloads.collectAsStateWithLifecycle()
+    val activeDownloads by viewModel.activeDownloads.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("已下载") },
+                title = { Text("下载管理") },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
@@ -58,16 +62,14 @@ fun DownloadsScreen(
         ) {
             when {
                 uiState.isLoading -> {
-                    // 加载中
                     LoadingState()
                 }
-                downloads.isEmpty() -> {
-                    // 空状态
+                activeDownloads.isEmpty() && downloads.isEmpty() -> {
                     EmptyState()
                 }
                 else -> {
-                    // 下载列表
                     DownloadList(
+                        activeDownloads = activeDownloads,
                         downloads = downloads,
                         isFileExists = { path -> viewModel.isFileExists(path) },
                         onDownloadClick = { download ->
@@ -79,6 +81,12 @@ fun DownloadsScreen(
                         },
                         onDeleteClick = { download ->
                             viewModel.showDeleteConfirm(download)
+                        },
+                        onRetryDownload = { resourcePath ->
+                            viewModel.retryDownload(resourcePath)
+                        },
+                        onCancelDownload = { resourcePath ->
+                            viewModel.cancelDownload(resourcePath)
                         }
                     )
                 }
@@ -142,35 +150,163 @@ fun DownloadsScreen(
 }
 
 /**
- * 下载列表
+ * 下载列表（包含下载中和已下载）
  */
 @Composable
 private fun DownloadList(
+    activeDownloads: Map<String, DownloadProgress>,
     downloads: List<DownloadItem>,
     isFileExists: (String) -> Boolean,
     onDownloadClick: (DownloadItem) -> Unit,
-    onDeleteClick: (DownloadItem) -> Unit
+    onDeleteClick: (DownloadItem) -> Unit,
+    onRetryDownload: (String) -> Unit,
+    onCancelDownload: (String) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(vertical = 8.dp)
     ) {
-        items(
-            items = downloads,
-            key = { it.id }
-        ) { download ->
-            DownloadItemCard(
-                download = download,
-                fileExists = isFileExists(download.localPath),
-                onClick = { onDownloadClick(download) },
-                onDelete = { onDeleteClick(download) }
-            )
+        // 下载中的项
+        if (activeDownloads.isNotEmpty()) {
+            item {
+                Text(
+                    text = "下载中",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+            items(
+                items = activeDownloads.entries.toList(),
+                key = { it.key }
+            ) { entry ->
+                ActiveDownloadCard(
+                    progress = entry.value,
+                    onRetry = { onRetryDownload(entry.key) },
+                    onCancel = { onCancelDownload(entry.key) }
+                )
+            }
+            item {
+                HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+            }
+        }
+
+        // 已下载的项
+        if (downloads.isNotEmpty()) {
+            item {
+                Text(
+                    text = "已下载",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                )
+            }
+            items(
+                items = downloads,
+                key = { it.id }
+            ) { download ->
+                DownloadItemCard(
+                    download = download,
+                    fileExists = isFileExists(download.localPath),
+                    onClick = { onDownloadClick(download) },
+                    onDelete = { onDeleteClick(download) }
+                )
+            }
         }
     }
 }
 
 /**
- * 下载项卡片
+ * 正在下载的卡片
+ */
+@Composable
+private fun ActiveDownloadCard(
+    progress: DownloadProgress,
+    onRetry: () -> Unit,
+    onCancel: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // 图标
+                Icon(
+                    imageVector = if (progress.isFailed) Icons.Default.VideoFile else Icons.Default.Download,
+                    contentDescription = if (progress.isFailed) "下载失败" else "下载中",
+                    tint = if (progress.isFailed) MaterialTheme.colorScheme.error
+                           else MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(40.dp)
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // 文件信息
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = progress.fileName.ifEmpty { "未命名文件" },
+                        style = MaterialTheme.typography.bodyLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    if (progress.isFailed) {
+                        Text(
+                            text = progress.error ?: "下载失败",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    } else {
+                        Text(
+                            text = "${progress.progressPercent}% · ${formatFileSize(progress.downloadedBytes)} / ${formatFileSize(progress.totalBytes)}",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+
+                // 操作按钮
+                if (progress.isFailed) {
+                    IconButton(onClick = onRetry) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "重试",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                IconButton(onClick = onCancel) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = if (progress.isFailed) "关闭" else "取消",
+                        tint = MaterialTheme.colorScheme.outline
+                    )
+                }
+            }
+
+            // 进度条（仅下载中显示）
+            if (progress.isDownloading) {
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { progress.progress },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 已下载项卡片
  */
 @Composable
 private fun DownloadItemCard(
