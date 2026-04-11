@@ -5,10 +5,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.QueueMusic
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.MoreVert
@@ -30,8 +34,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.activity.compose.BackHandler
 import androidx.core.view.ViewCompat
@@ -46,6 +52,7 @@ import com.tdull.webdavviewer.app.ui.theme.PlayerTheme
 import com.tdull.webdavviewer.app.viewmodel.VideoPlayerViewModel
 import com.tdull.webdavviewer.app.viewmodel.VideoPlayerUiState
 import com.tdull.webdavviewer.app.viewmodel.VideoInfo
+import com.tdull.webdavviewer.app.viewmodel.PlaylistItem
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -228,6 +235,7 @@ fun VideoPlayerScreen(
                     onShowVideoInfo = { viewModel.toggleVideoInfoDialog(true) },
                     onShowSettings = { viewModel.toggleSettingsDialog(true) },
                     onToggleFavorite = { viewModel.toggleFavorite(videoUrl, videoTitle) },
+                    onTogglePlaylist = { viewModel.togglePlaylist() },
                     modifier = Modifier.align(Alignment.BottomStart)
                 )
 
@@ -261,6 +269,17 @@ fun VideoPlayerScreen(
                     errorMessage = error,
                     onRetry = { viewModel.retry() },
                     modifier = Modifier.align(Alignment.Center)
+                )
+            }
+
+            // 播放列表面板（独立于控制栏显示状态）
+            if (uiState.showPlaylist) {
+                PlaylistBottomSheet(
+                    items = uiState.playlistItems,
+                    currentIndex = uiState.currentPlaylistIndex,
+                    isLoading = uiState.isPlaylistLoading,
+                    onItemSelected = { index -> viewModel.playPlaylistItem(index) },
+                    onDismiss = { viewModel.hidePlaylist() }
                 )
             }
         }
@@ -520,6 +539,7 @@ private fun VideoPlayerBottomControls(
     onShowVideoInfo: () -> Unit,
     onShowSettings: () -> Unit,
     onToggleFavorite: () -> Unit = {},
+    onTogglePlaylist: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var isSeeking by remember { mutableStateOf(false) }
@@ -668,6 +688,16 @@ private fun VideoPlayerBottomControls(
                         )
                     }
                 }
+            }
+
+            // 播放列表按钮
+            IconButton(onClick = onTogglePlaylist) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                    contentDescription = "播放列表",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
             // 音量控制
@@ -1088,4 +1118,165 @@ private fun PlayerSettingsDialog(
             }
         }
     )
+}
+
+/**
+ * 播放列表底部面板
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PlaylistBottomSheet(
+    items: List<PlaylistItem>,
+    currentIndex: Int,
+    isLoading: Boolean,
+    onItemSelected: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val listState = rememberLazyListState()
+
+    // 打开时自动滚动到当前播放项
+    LaunchedEffect(items, currentIndex) {
+        if (currentIndex >= 0 && items.isNotEmpty()) {
+            listState.scrollToItem(currentIndex)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        containerColor = Color.Black.copy(alpha = 0.95f),
+        contentColor = Color.White,
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+        ) {
+            // 标题栏
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "播放列表",
+                    color = Color.White,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "${items.size}个视频",
+                    color = Color.Gray,
+                    style = MaterialTheme.typography.bodySmall
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                TextButton(onClick = onDismiss) {
+                    Text(text = "关闭", color = Color.Gray)
+                }
+            }
+
+            HorizontalDivider(color = Color.Gray.copy(alpha = 0.3f))
+
+            if (isLoading) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+            } else if (items.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "当前目录没有视频文件",
+                        color = Color.Gray,
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxWidth(),
+                    contentPadding = PaddingValues(vertical = 2.dp)
+                ) {
+                    itemsIndexed(
+                        items = items,
+                        key = { _, item -> item.path }
+                    ) { index, item ->
+                        PlaylistItemRow(
+                            item = item,
+                            index = index,
+                            isCurrentItem = index == currentIndex,
+                            onClick = { onItemSelected(index) }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 播放列表项行（紧凑布局）
+ */
+@Composable
+private fun PlaylistItemRow(
+    item: PlaylistItem,
+    index: Int,
+    isCurrentItem: Boolean,
+    onClick: () -> Unit
+) {
+    val textColor = if (isCurrentItem) MaterialTheme.colorScheme.primary else Color.White
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 播放中指示/序号
+        Box(
+            modifier = Modifier.width(28.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isCurrentItem) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            } else {
+                Text(
+                    text = "${index + 1}",
+                    color = Color.Gray,
+                    fontSize = 12.sp
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(4.dp))
+
+        // 文件名
+        Text(
+            text = item.name,
+            color = textColor,
+            fontSize = 13.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f)
+        )
+    }
 }

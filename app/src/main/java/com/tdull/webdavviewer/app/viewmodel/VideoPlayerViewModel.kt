@@ -17,6 +17,8 @@ import com.tdull.webdavviewer.app.data.remote.WebDAVClient
 import com.tdull.webdavviewer.app.data.repository.PlayerSettingsRepository
 import com.tdull.webdavviewer.app.data.repository.FavoritesRepository
 import com.tdull.webdavviewer.app.data.repository.ConfigRepository
+import com.tdull.webdavviewer.app.data.repository.WebDAVRepository
+import com.tdull.webdavviewer.app.data.model.ResourceType
 import com.tdull.webdavviewer.app.util.ErrorHandler
 import com.tdull.webdavviewer.app.util.ErrorInfo
 import com.tdull.webdavviewer.app.util.NetworkMonitor
@@ -31,6 +33,15 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import okhttp3.Credentials
 import javax.inject.Inject
+
+/**
+ * 播放列表项数据类
+ */
+data class PlaylistItem(
+    val path: String,       // 相对路径
+    val name: String,       // 显示名称（去掉扩展名）
+    val streamUrl: String   // 流地址
+)
 
 /**
  * 视频信息数据类
@@ -70,7 +81,11 @@ data class VideoPlayerUiState(
     val fastForwardSpeed: Float = 3f, // 临时倍速播放速度
     val originalPlaybackSpeed: Float = 1f, // 临时倍速前的原始播放速度
     val isDragSeeking: Boolean = false, // 是否处于拖动进度调整状态
-    val dragSeekOffset: Long = 0L // 拖动进度调整的偏移量（毫秒）
+    val dragSeekOffset: Long = 0L, // 拖动进度调整的偏移量（毫秒）
+    val showPlaylist: Boolean = false, // 显示播放列表
+    val playlistItems: List<PlaylistItem> = emptyList(), // 播放列表项
+    val currentPlaylistIndex: Int = -1, // 当前播放项在列表中的索引
+    val isPlaylistLoading: Boolean = false // 播放列表是否正在加载
 )
 
 /**
@@ -83,6 +98,7 @@ class VideoPlayerViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val networkMonitor: NetworkMonitor,
     private val webDAVClient: WebDAVClient,  // 注入 WebDAVClient 用于获取认证信息
+    private val webDAVRepository: WebDAVRepository,  // 注入 WebDAV仓库用于获取目录文件列表
     private val playerSettingsRepository: PlayerSettingsRepository,  // 注入播放器设置仓库
     private val favoritesRepository: FavoritesRepository,  // 注入收藏仓库
     private val configRepository: ConfigRepository  // 注入配置仓库
@@ -168,12 +184,24 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     /**
-     * 从视频URL中提取资源路径
+     * 从视频URL中提取资源路径（相对于WebDAV根目录，不包含服务器的base path）
      */
     private fun extractResourcePath(videoUrl: String): String {
         return try {
-            val url = java.net.URL(videoUrl)
-            url.path
+            val urlPath = java.net.URL(videoUrl).path
+            // 从完整URL路径中去除服务器配置的base path，避免重复拼接
+            val basePath = webDAVClient.getCurrentConfig()?.let { config ->
+                try {
+                    java.net.URI(config.getBaseUrl()).path?.trimEnd('/')
+                } catch (e: Exception) {
+                    null
+                }
+            }
+            if (basePath != null && urlPath.startsWith(basePath)) {
+                urlPath.substring(basePath.length).ifEmpty { "/" }
+            } else {
+                urlPath
+            }
         } catch (e: Exception) {
             "/"
         }
@@ -189,6 +217,81 @@ class VideoPlayerViewModel @Inject constructor(
             path.substringAfterLast("/")
         } catch (e: Exception) {
             "未知视频"
+        }
+    }
+
+    /**
+     * 从视频URL中提取父目录路径（相对于WebDAV根目录）
+     */
+    private fun getParentDirectoryPath(videoUrl: String): String {
+        val resourcePath = extractResourcePath(videoUrl)
+        val parentPath = resourcePath.substringBeforeLast("/")
+        return if (parentPath.isEmpty()) "/" else parentPath
+    }
+
+    /**
+     * 切换播放列表显示状态
+     */
+    fun togglePlaylist() {
+        val currentState = _uiState.value
+        if (currentState.showPlaylist) {
+            _uiState.update { it.copy(showPlaylist = false) }
+        } else {
+            _uiState.update { it.copy(showPlaylist = true) }
+            loadPlaylist()
+        }
+    }
+
+    /**
+     * 加载播放列表（当前目录下的视频文件）
+     */
+    fun loadPlaylist() {
+        val url = currentVideoUrl ?: return
+        val dirPath = getParentDirectoryPath(url)
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isPlaylistLoading = true) }
+            try {
+                val result = webDAVRepository.listFiles(dirPath)
+                result.onSuccess { resources ->
+                    val videoItems = resources
+                        .filter { it.resourceType == ResourceType.VIDEO }
+                        .sortedBy { it.name.lowercase() }
+                        .map { resource ->
+                            PlaylistItem(
+                                path = resource.path,
+                                name = resource.name.substringBeforeLast("."),
+                                streamUrl = webDAVClient.getStreamUrl(resource.path)
+                            )
+                        }
+
+                    val currentIndex = videoItems.indexOfFirst { it.streamUrl == url }
+
+                    _uiState.update {
+                        it.copy(
+                            playlistItems = videoItems,
+                            currentPlaylistIndex = currentIndex,
+                            isPlaylistLoading = false
+                        )
+                    }
+                }.onFailure {
+                    _uiState.update { it.copy(isPlaylistLoading = false) }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isPlaylistLoading = false) }
+            }
+        }
+    }
+
+    /**
+     * 播放列表中的指定项
+     */
+    fun playPlaylistItem(index: Int) {
+        val items = _uiState.value.playlistItems
+        if (index in items.indices) {
+            val item = items[index]
+            _uiState.update { it.copy(currentPlaylistIndex = index) }
+            initializePlayer(item.streamUrl)
         }
     }
 
@@ -531,6 +634,13 @@ class VideoPlayerViewModel @Inject constructor(
     }
 
     /**
+     * 关闭播放列表
+     */
+    fun hidePlaylist() {
+        _uiState.update { it.copy(showPlaylist = false) }
+    }
+
+    /**
      * 显示/隐藏视频信息弹窗
      */
     fun toggleVideoInfoDialog(show: Boolean) {
@@ -600,6 +710,13 @@ class VideoPlayerViewModel @Inject constructor(
         _player.value = null
         playerListener = null
         currentVideoUrl = null
+        _uiState.update {
+            it.copy(
+                playlistItems = emptyList(),
+                currentPlaylistIndex = -1,
+                showPlaylist = false
+            )
+        }
     }
 
     override fun onCleared() {
