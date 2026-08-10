@@ -9,6 +9,13 @@ WebDAVViewer 是一个用于浏览和查看 WebDAV 资源（文件、视频、�
 ## 构建命令
 
 ```bash
+
+# 初始化环境变量
+export JAVA_HOME="/d/app/jdk-17.0.14+7"
+export ANDROID_HOME="/d/app_data/android/sdk"
+export PATH="$JAVA_HOME/bin:$PATH"
+
+
 # 构建项目
 ./gradlew assembleDebug
 
