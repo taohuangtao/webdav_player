@@ -64,13 +64,14 @@ class WebDAVRepositoryImplTest {
             name = "Test",
             url = "https://example.com"
         )
-        
-        `when`(mockClient.connect(config)).thenThrow(WebDAVException.AuthenticationFailed())
-        
+
+        // 客户端抛非受检异常时，仓库应包装为 ConnectionFailed 失败结果
+        `when`(mockClient.connect(config)).thenThrow(RuntimeException("模拟连接异常"))
+
         val result = repository.connect(config)
-        
+
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is WebDAVException.AuthenticationFailed)
+        assertTrue(result.exceptionOrNull() is WebDAVException.ConnectionFailed)
     }
 
     // ========== listFiles 测试 ==========
@@ -126,12 +127,13 @@ class WebDAVRepositoryImplTest {
 
     @Test
     fun `listFiles returns failure when client throws exception`() = runTest {
-        `when`(mockClient.listFiles("/")).thenThrow(WebDAVException.ResourceNotFound("/missing"))
-        
+        // 客户端抛非受检异常时，仓库应包装为 ConnectionFailed 失败结果
+        `when`(mockClient.listFiles("/")).thenThrow(RuntimeException("模拟列表异常"))
+
         val result = repository.listFiles("/")
-        
+
         assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is WebDAVException.ResourceNotFound)
+        assertTrue(result.exceptionOrNull() is WebDAVException.ConnectionFailed)
     }
 
     // ========== testConnection 测试 ==========

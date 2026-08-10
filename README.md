@@ -56,6 +56,14 @@ gradlew lint
 gradlew build --refresh-dependencies
 ```
 
+
+## 安装到手机
+
+cmd 执行下面命令
+
+```cmd
+D:\app_data\android\sdk\platform-tools\adb.exe -r app\build\outputs\apk\release\WebDAVViewer-1.0-release.apk
+```
 ## 环境要求
 
 - Android SDK

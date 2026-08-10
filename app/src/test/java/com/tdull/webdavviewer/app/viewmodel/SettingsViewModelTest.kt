@@ -16,6 +16,7 @@ import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
+import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
@@ -54,6 +55,10 @@ class SettingsViewModelTest {
         whenever(mockConfigRepository.activeServerId).thenReturn(flowOf(null))
         whenever(mockNetworkMonitor.networkStatus).thenReturn(flowOf(NetworkStatus(isAvailable = true)))
         whenever(mockNetworkMonitor.isNetworkAvailable()).thenReturn(true)
+
+        // ErrorHandler 依赖 application.getString 获取文案，mock 默认返回 null 会导致 NPE
+        whenever(mockApplication.getString(anyInt())).thenReturn("mock_title")
+        whenever(mockApplication.getString(anyInt(), any())).thenReturn("mock_message")
 
         viewModel = SettingsViewModel(
             application = mockApplication,

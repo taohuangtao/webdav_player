@@ -25,7 +25,9 @@ import org.junit.Before
 import org.junit.Test
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
+import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.kotlin.any
+import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -73,6 +75,10 @@ class FileBrowserViewModelTest {
         whenever(mockFavoritesRepository.favorites).thenReturn(flowOf(emptyList<FavoriteItem>()))
         whenever(mockDownloadsRepository.downloads).thenReturn(flowOf(emptyList<DownloadItem>()))
         whenever(mockDownloadManager.downloadProgress).thenReturn(MutableStateFlow(emptyMap()))
+
+        // ErrorHandler 依赖 application.getString 获取文案，mock 默认返回 null 会导致 error 为 null 或抛 NPE
+        whenever(mockApplication.getString(anyInt())).thenReturn("mock_title")
+        whenever(mockApplication.getString(anyInt(), any())).thenReturn("mock_message")
 
         viewModel = FileBrowserViewModel(
             application = mockApplication,
@@ -170,11 +176,12 @@ class FileBrowserViewModelTest {
 
         viewModel.selectServer(config)
 
+        // isNetworkAvailable 由 networkStatus flow 驱动，selectServer 的网络检查仅同步判断并设置错误状态
         viewModel.uiState.test {
             val finalState = awaitItem()
             assertFalse(finalState.isConnected)
-            assertFalse(finalState.isNetworkAvailable)
             assertNotNull(finalState.error)
+            assertNotNull(finalState.errorInfo)
         }
     }
 
@@ -185,10 +192,13 @@ class FileBrowserViewModelTest {
         val files = listOf(
             WebDAVResource(path = "/subfolder/file.txt", name = "file.txt", isDirectory = false)
         )
+        // selectServer 成功后会加载根目录，navigateTo 会加载目标目录，均需 stub
+        whenever(mockWebDavRepository.listFiles("/")).thenReturn(Result.success(emptyList()))
         whenever(mockWebDavRepository.listFiles("/subfolder")).thenReturn(Result.success(files))
 
         // 先连接服务器
         val config = ServerConfig(name = "Test", url = "https://example.com")
+        whenever(mockWebDavRepository.connect(config)).thenReturn(Result.success(Unit))
         viewModel.selectServer(config)
 
         viewModel.navigateTo("/subfolder")
@@ -235,11 +245,13 @@ class FileBrowserViewModelTest {
         whenever(mockWebDavRepository.listFiles("/")).thenReturn(Result.success(emptyList()))
 
         val config = ServerConfig(name = "Test", url = "https://example.com")
+        whenever(mockWebDavRepository.connect(config)).thenReturn(Result.success(Unit))
         viewModel.selectServer(config)
 
         viewModel.refresh()
 
-        verify(mockWebDavRepository).listFiles("/")
+        // selectServer 成功后自动加载一次根目录，refresh 再加载一次，共 2 次
+        verify(mockWebDavRepository, times(2)).listFiles("/")
     }
 
     // ========== getStreamUrl 测试 ==========
