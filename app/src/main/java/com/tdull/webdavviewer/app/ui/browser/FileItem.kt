@@ -43,6 +43,7 @@ fun FileItem(
     onDownloadClick: () -> Unit = {},
     onRetryClick: () -> Unit = {},
     onCancelDownload: () -> Unit = {},
+    onMoreClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val icon = getResourceIcon(resource.resourceType)
@@ -122,11 +123,26 @@ fun FileItem(
                 
                 // 目录箭头
                 if (resource.isDirectory) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = "进入目录",
-                        tint = MaterialTheme.colorScheme.outline
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "进入目录",
+                            tint = MaterialTheme.colorScheme.outline
+                        )
+                        // 更多操作按钮
+                        IconButton(
+                            onClick = onMoreClick,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "更多操作",
+                                tint = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
                 } else {
                     Row(
                         verticalAlignment = Alignment.CenterVertically
@@ -204,6 +220,17 @@ fun FileItem(
                                     MaterialTheme.colorScheme.primary
                                 else
                                     MaterialTheme.colorScheme.outline
+                            )
+                        }
+                        // 更多操作按钮
+                        IconButton(
+                            onClick = onMoreClick,
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "更多操作",
+                                tint = MaterialTheme.colorScheme.outline
                             )
                         }
                     }

@@ -98,6 +98,47 @@ class WebDAVRepositoryImpl @Inject constructor(
         }
     }
     
+    override suspend fun rename(resource: WebDAVResource, newName: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            client.rename(resource.path, newName, resource.isDirectory)
+            // 重命名后清除源目录缓存（目标目录与源目录相同）
+            val sourceDir = getParentDirPath(resource.path)
+            clearCache(sourceDir)
+            Result.success(Unit)
+        } catch (e: WebDAVException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            Result.failure(WebDAVException.ConnectionFailed(e))
+        }
+    }
+    
+    override suspend fun move(resource: WebDAVResource, destinationDir: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            client.moveResource(resource.path, destinationDir, resource.isDirectory)
+            // 移动后清除源目录和目标目录缓存
+            clearCache(getParentDirPath(resource.path))
+            clearCache(destinationDir.trimEnd('/'))
+            Result.success(Unit)
+        } catch (e: WebDAVException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            Result.failure(WebDAVException.ConnectionFailed(e))
+        }
+    }
+    
+    override suspend fun delete(resource: WebDAVResource): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            client.deleteResource(resource.path, resource.isDirectory)
+            // 删除后清除父目录缓存
+            clearCache(getParentDirPath(resource.path))
+            Result.success(Unit)
+        } catch (e: WebDAVException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            Result.failure(WebDAVException.ConnectionFailed(e))
+        }
+    }
+    
     /**
      * 获取缓存的目录列表（线程安全）
      */
@@ -136,6 +177,21 @@ class WebDAVRepositoryImpl @Inject constructor(
     suspend fun clearCache(path: String) {
         cacheMutex.withLock {
             cache.remove(path)
+        }
+    }
+    
+    /**
+     * 获取资源所在的父目录路径
+     * "/movies/aaa.mp4" -> "/movies/"
+     */
+    private fun getParentDirPath(path: String): String {
+        val normalizedPath = path.trimStart('/').trimEnd('/')
+        if (normalizedPath.isEmpty()) return "/"
+        val lastSlashIndex = normalizedPath.lastIndexOf('/')
+        return if (lastSlashIndex < 0) {
+            "/"
+        } else {
+            "/${normalizedPath.substring(0, lastSlashIndex)}/"
         }
     }
     

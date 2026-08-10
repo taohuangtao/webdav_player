@@ -100,6 +100,13 @@ android {
         }
     }
     
+    // 单元测试配置：让 Android 方法（如 android.util.Log）在单元测试中返回默认值
+    testOptions {
+        unitTests {
+            isReturnDefaultValues = true
+        }
+    }
+    
     // 配置输出 APK 文件名
     applicationVariants.all {
         outputs.all {

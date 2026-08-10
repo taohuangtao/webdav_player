@@ -39,7 +39,10 @@ data class FileBrowserUiState(
     val errorInfo: ErrorInfo? = null,
     val isConnected: Boolean = false,
     val currentServer: ServerConfig? = null,
-    val isNetworkAvailable: Boolean = true
+    val isNetworkAvailable: Boolean = true,
+    val isOperationLoading: Boolean = false,
+    val operationError: String? = null,
+    val operationSuccess: String? = null
 )
 
 /**
@@ -463,5 +466,109 @@ class FileBrowserViewModel @Inject constructor(
      */
     fun cancelDownload(resourcePath: String) {
         downloadManager.cancelDownload(resourcePath)
+    }
+
+    /**
+     * 重命名文件或文件夹
+     * @param resource 要重命名的资源
+     * @param newName 新的名称
+     */
+    fun renameResource(resource: WebDAVResource, newName: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOperationLoading = true, operationError = null, operationSuccess = null) }
+            val result = webDavRepository.rename(resource, newName)
+            handleOperationResult(
+                result = result,
+                successMessage = "已重命名为 \"$newName\""
+            )
+        }
+    }
+
+    /**
+     * 移动文件或文件夹到目标目录
+     * @param resource 要移动的资源
+     * @param destinationDir 目标目录路径
+     */
+    fun moveResource(resource: WebDAVResource, destinationDir: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOperationLoading = true, operationError = null, operationSuccess = null) }
+            val result = webDavRepository.move(resource, destinationDir)
+            handleOperationResult(
+                result = result,
+                successMessage = "已移动到 \"${destinationDir.trimEnd('/')}\""
+            )
+        }
+    }
+
+    /**
+     * 删除文件或文件夹
+     * @param resource 要删除的资源
+     */
+    fun deleteResource(resource: WebDAVResource) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOperationLoading = true, operationError = null, operationSuccess = null) }
+            val result = webDavRepository.delete(resource)
+            handleOperationResult(
+                result = result,
+                successMessage = "已删除 \"${resource.name}\""
+            )
+        }
+    }
+
+    /**
+     * 清除操作状态（成功/错误提示）
+     */
+    fun clearOperationFeedback() {
+        _uiState.update { it.copy(operationError = null, operationSuccess = null) }
+    }
+
+    /**
+     * 列出指定路径下的子目录（用于移动对话框选择目标目录）
+     * @param path 目录路径
+     * @return 子目录列表；失败时返回空列表
+     */
+    suspend fun listDirectories(path: String): List<WebDAVResource> {
+        return try {
+            val result = webDavRepository.listFiles(path)
+            result.getOrNull()
+                ?.filter { it.isDirectory }
+                ?.filter { it.path.trimEnd('/') != path.trimEnd('/') }
+                ?.sortedBy { it.name.lowercase() }
+                ?: emptyList()
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
+    /**
+     * 处理操作结果：成功后刷新当前目录，失败则记录错误
+     */
+    private fun handleOperationResult(
+        result: Result<Unit>,
+        successMessage: String
+    ) {
+        result.fold(
+            onSuccess = {
+                _uiState.update {
+                    it.copy(
+                        isOperationLoading = false,
+                        operationSuccess = successMessage,
+                        operationError = null
+                    )
+                }
+                // 操作成功后刷新当前目录
+                refresh()
+            },
+            onFailure = { error ->
+                val errorInfo = ErrorHandler.getErrorInfo(error, application)
+                _uiState.update {
+                    it.copy(
+                        isOperationLoading = false,
+                        operationError = errorInfo.message,
+                        operationSuccess = null
+                    )
+                }
+            }
+        )
     }
 }

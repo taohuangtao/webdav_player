@@ -283,6 +283,148 @@ class WebDAVClient @Inject constructor(
         // 文件URL不以/结尾
         return "$baseUrl${normalizedPath.encodePath()}"
     }
+
+    /**
+     * 重命名文件或文件夹
+     * 重命名本质上是移动到父目录下新的名称，即 MOVE 操作
+     * @param sourcePath 源资源路径，如 "/movies/aaa.mp4"
+     * @param newName 新的名称，如 "bbb.mp4"
+     * @param isDirectory 源资源是否为目录（目录 URL 需要以 / 结尾，文件不需要）
+     */
+    fun rename(sourcePath: String, newName: String, isDirectory: Boolean = false) {
+        val config = currentConfig ?: throw IllegalStateException("未配置服务器")
+        checkWriteSupport()
+        
+        // 目标路径 = 源路径的父目录 + 新名称
+        val parentPath = getParentPath(sourcePath)
+        val destinationPath = if (parentPath == "/") {
+            "/$newName"
+        } else {
+            "$parentPath$newName"
+        }
+        
+        moveResourceInternal(config, sourcePath, destinationPath, isDirectory)
+    }
+
+    /**
+     * 移动文件或文件夹到目标目录
+     * @param sourcePath 源资源路径，如 "/movies/aaa.mp4"
+     * @param destinationDir 目标目录路径，如 "/videos/" 或 "/videos"
+     * @param isDirectory 源资源是否为目录（目录 URL 需要以 / 结尾，文件不需要）
+     */
+    fun moveResource(sourcePath: String, destinationDir: String, isDirectory: Boolean = false) {
+        val config = currentConfig ?: throw IllegalStateException("未配置服务器")
+        checkWriteSupport()
+        
+        // 源文件名（保留原名）
+        val sourceName = sourcePath.substringAfterLast('/')
+        val normalizedDir = if (destinationDir.endsWith("/")) destinationDir else "$destinationDir/"
+        val destinationPath = if (normalizedDir == "/") {
+            "/$sourceName"
+        } else {
+            "$normalizedDir$sourceName"
+        }
+        
+        moveResourceInternal(config, sourcePath, destinationPath, isDirectory)
+    }
+
+    /**
+     * 删除文件或文件夹（文件夹递归删除，由服务器处理）
+     * @param path 资源路径
+     * @param isDirectory 资源是否为目录（目录 URL 需要以 / 结尾，文件不需要）
+     */
+    fun deleteResource(path: String, isDirectory: Boolean = false) {
+        val config = currentConfig ?: throw IllegalStateException("未配置服务器")
+        checkWriteSupport()
+        
+        val url = buildResourceUrl(config, path, isDirectory)
+        val request = buildDavRequest(url, config, "DELETE")
+        
+        try {
+            val response = okHttpClient.newCall(request).execute()
+            response.use {
+                if (!it.isSuccessful) {
+                    handleWriteErrorResponse(it)
+                }
+            }
+        } catch (e: WebDAVException) {
+            throw e
+        } catch (e: Exception) {
+            throw WebDAVException.ConnectionFailed(e)
+        }
+    }
+
+    /**
+     * 检查服务器是否支持写操作
+     */
+    private fun checkWriteSupport() {
+        val config = currentConfig ?: throw IllegalStateException("未配置服务器")
+        val detectedType = serverType ?: detectServerType(config)
+        if (detectedType != ServerType.PROPFIND) {
+            throw WebDAVException.UnsupportedOperation()
+        }
+    }
+
+    /**
+     * 执行 MOVE 操作
+     * @param isDirectory 源资源是否为目录（决定 source/destination URL 是否以 / 结尾）
+     */
+    private fun moveResourceInternal(config: ServerConfig, sourcePath: String, destinationPath: String, isDirectory: Boolean) {
+        val sourceUrl = buildResourceUrl(config, sourcePath, isDirectory)
+        // Destination 头必须为目标资源的完整 URL，目标资源与源资源保持相同的目录/文件性质
+        val destinationUrl = buildResourceUrl(config, destinationPath, isDirectory)
+        
+        val request = buildDavRequest(sourceUrl, config, "MOVE")
+            .newBuilder()
+            .header("Destination", destinationUrl)
+            .build()
+        
+        try {
+            val response = okHttpClient.newCall(request).execute()
+            response.use {
+                if (!it.isSuccessful) {
+                    handleWriteErrorResponse(it)
+                }
+            }
+        } catch (e: WebDAVException) {
+            throw e
+        } catch (e: Exception) {
+            throw WebDAVException.ConnectionFailed(e)
+        }
+    }
+
+    /**
+     * 构建 WebDAV 写操作请求（MOVE/DELETE）
+     */
+    private fun buildDavRequest(url: String, config: ServerConfig, method: String): Request {
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .method(method, null)
+        
+        if (config.requiresAuth()) {
+            val credentials = Credentials.basic(config.username, config.password)
+            requestBuilder.header("Authorization", credentials)
+        }
+        
+        return requestBuilder.build()
+    }
+
+    /**
+     * 获取父目录路径
+     * "/movies/aaa.mp4" -> "/movies/"
+     * "aaa.mp4" -> "/"
+     */
+    private fun getParentPath(path: String): String {
+        val normalizedPath = path.trimStart('/').trimEnd('/')
+        if (normalizedPath.isEmpty()) return "/"
+        val lastSlashIndex = normalizedPath.lastIndexOf('/')
+        return if (lastSlashIndex < 0) {
+            "/"
+        } else {
+            val parent = normalizedPath.substring(0, lastSlashIndex)
+            "/$parent/"
+        }
+    }
     
     /**
      * 构建完整的URL（目录用，带/结尾）
@@ -297,6 +439,27 @@ class WebDAVClient @Inject constructor(
             "$baseUrl${normalizedPath.encodePath()}"
         }
         return fullPath
+    }
+
+    /**
+     * 构建资源的精确URL（用于写操作 MOVE/DELETE）
+     * 与 buildFullUrl 不同，这里根据资源是否为目录决定是否以 / 结尾：
+     * - 目录需要以 / 结尾（服务器对目录资源返回 3xx/识别为目录）
+     * - 文件不能以 / 结尾（否则服务器找不到该文件）
+     * @param config 服务器配置
+     * @param path 资源路径
+     * @param isDirectory 资源是否为目录
+     */
+    private fun buildResourceUrl(config: ServerConfig, path: String, isDirectory: Boolean): String {
+        val baseUrl = config.getNormalizedUrl()
+        val normalizedPath = if (path.startsWith("/")) path.substring(1) else path
+        val encoded = normalizedPath.encodePath()
+        val shouldEndWithSlash = isDirectory && normalizedPath.isNotEmpty() && !normalizedPath.endsWith("/")
+        return if (shouldEndWithSlash) {
+            "$baseUrl$encoded/"
+        } else {
+            "$baseUrl$encoded"
+        }
     }
     
     /**
@@ -343,6 +506,20 @@ class WebDAVClient @Inject constructor(
             404 -> throw WebDAVException.ResourceNotFound("请求的资源")
             in 500..599 -> throw WebDAVException.ServerError(response.code, response.message)
             else -> throw WebDAVException.ServerError(response.code, response.message)
+        }
+    }
+
+    /**
+     * 处理写操作（MOVE/DELETE）的错误响应
+     */
+    private fun handleWriteErrorResponse(response: Response): Nothing {
+        when (response.code) {
+            401 -> throw WebDAVException.AuthenticationFailed()
+            403 -> throw WebDAVException.OperationFailed("没有权限执行此操作，可能被服务器拒绝")
+            404 -> throw WebDAVException.ResourceNotFound("请求的资源")
+            400, 409 -> throw WebDAVException.OperationFailed("操作失败：目标资源已存在或路径冲突")
+            in 500..599 -> throw WebDAVException.ServerError(response.code, response.message)
+            else -> throw WebDAVException.OperationFailed("操作失败 (${response.code}): ${response.message}")
         }
     }
     

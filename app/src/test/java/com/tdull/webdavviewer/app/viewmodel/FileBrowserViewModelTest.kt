@@ -2,11 +2,16 @@ package com.tdull.webdavviewer.app.viewmodel
 
 import android.app.Application
 import app.cash.turbine.test
+import com.tdull.webdavviewer.app.data.model.DownloadItem
+import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.data.model.ServerConfig
 import com.tdull.webdavviewer.app.data.model.WebDAVException
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.data.repository.ConfigRepository
+import com.tdull.webdavviewer.app.data.repository.DownloadsRepository
+import com.tdull.webdavviewer.app.data.repository.FavoritesRepository
 import com.tdull.webdavviewer.app.data.repository.WebDAVRepository
+import com.tdull.webdavviewer.app.service.DownloadManager
 import com.tdull.webdavviewer.app.util.NetworkMonitor
 import com.tdull.webdavviewer.app.util.NetworkStatus
 import kotlinx.coroutines.Dispatchers
@@ -42,6 +47,15 @@ class FileBrowserViewModelTest {
     @Mock
     private lateinit var mockNetworkMonitor: NetworkMonitor
 
+    @Mock
+    private lateinit var mockFavoritesRepository: FavoritesRepository
+
+    @Mock
+    private lateinit var mockDownloadsRepository: DownloadsRepository
+
+    @Mock
+    private lateinit var mockDownloadManager: DownloadManager
+
     private lateinit var viewModel: FileBrowserViewModel
 
     private val testDispatcher = UnconfinedTestDispatcher()
@@ -56,13 +70,18 @@ class FileBrowserViewModelTest {
         whenever(mockConfigRepository.activeServer).thenReturn(flowOf(null))
         whenever(mockNetworkMonitor.networkStatus).thenReturn(flowOf(NetworkStatus(isAvailable = true)))
         whenever(mockNetworkMonitor.isNetworkAvailable()).thenReturn(true)
-        whenever(mockWebDavRepository.connect(any())).thenReturn(Result.success(Unit))
+        whenever(mockFavoritesRepository.favorites).thenReturn(flowOf(emptyList<FavoriteItem>()))
+        whenever(mockDownloadsRepository.downloads).thenReturn(flowOf(emptyList<DownloadItem>()))
+        whenever(mockDownloadManager.downloadProgress).thenReturn(MutableStateFlow(emptyMap()))
 
         viewModel = FileBrowserViewModel(
             application = mockApplication,
             webDavRepository = mockWebDavRepository,
             configRepository = mockConfigRepository,
-            networkMonitor = mockNetworkMonitor
+            networkMonitor = mockNetworkMonitor,
+            favoritesRepository = mockFavoritesRepository,
+            downloadsRepository = mockDownloadsRepository,
+            downloadManager = mockDownloadManager
         )
     }
 

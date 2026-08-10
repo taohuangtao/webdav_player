@@ -46,4 +46,20 @@ sealed class WebDAVException : Exception() {
     class ServerError(val statusCode: Int, message: String? = null) : WebDAVException() {
         override val message: String = "服务器错误 ($statusCode): ${message ?: "未知错误"}"
     }
+
+    /**
+     * 写操作失败异常（重命名/移动/删除）
+     * 例如：目标已存在（409/400）、操作被拒绝（403）等
+     */
+    class OperationFailed(message: String) : WebDAVException() {
+        override val message: String = message
+    }
+
+    /**
+     * 服务器不支持写操作异常
+     * 例如：Nginx autoindex 服务器不支持 MOVE/DELETE
+     */
+    class UnsupportedOperation : WebDAVException() {
+        override val message: String = "当前服务器不支持此操作"
+    }
 }

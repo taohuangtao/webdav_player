@@ -336,4 +336,180 @@ class WebDAVClientTest {
         assertNotNull(authHeader)
         assertTrue(authHeader!!.startsWith("Basic "))
     }
+
+    // ========== rename / moveResource / deleteResource 测试 ==========
+
+    private fun createPropfindConfig(): ServerConfig {
+        return ServerConfig(
+            name = "Test",
+            url = mockWebServer.url("/webdav/").toString().trimEnd('/')
+        )
+    }
+
+    private fun setupPropfindClient() {
+        // 强制使用 PROPFIND 服务器类型，并预置一个 PROPFIND 探测响应
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(207)
+                .setBody("<?xml version=\"1.0\"?><D:multistatus xmlns:D=\"DAV:\"></D:multistatus>")
+        )
+        client.connect(createPropfindConfig())
+    }
+
+    @Test
+    fun `moveResource sends MOVE request for file without trailing slash`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(201))
+
+        client.moveResource("/folder/aaa.mp4", "/videos")
+
+        // 先消费 connect 探测产生的 PROPFIND 请求
+        val probeRequest = mockWebServer.takeRequest()
+        assertEquals("PROPFIND", probeRequest.method)
+        // 再获取 MOVE 请求
+        val recordedRequest = mockWebServer.takeRequest()
+        assertEquals("MOVE", recordedRequest.method)
+        // 文件 URL 不应以 / 结尾
+        assertEquals("/webdav/folder/aaa.mp4", recordedRequest.path)
+        val destination = recordedRequest.getHeader("Destination")
+        assertNotNull(destination)
+        // 目标 URL 应指向新目录下的同名文件，且不带尾斜杠
+        assertEquals("${mockWebServer.url("/webdav/videos/aaa.mp4")}", destination)
+    }
+
+    @Test
+    fun `moveResource sends MOVE request for directory with trailing slash`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(201))
+
+        client.moveResource("/folder/subdir", "/videos", isDirectory = true)
+
+        // 先消费 connect 探测产生的 PROPFIND 请求
+        val probeRequest = mockWebServer.takeRequest()
+        assertEquals("PROPFIND", probeRequest.method)
+        // 再获取 MOVE 请求
+        val recordedRequest = mockWebServer.takeRequest()
+        assertEquals("MOVE", recordedRequest.method)
+        // 目录 URL 应以 / 结尾
+        assertEquals("/webdav/folder/subdir/", recordedRequest.path)
+        val destination = recordedRequest.getHeader("Destination")
+        assertNotNull(destination)
+        assertEquals("${mockWebServer.url("/webdav/videos/subdir/")}", destination)
+    }
+
+    @Test
+    fun `rename sends MOVE request with renamed Destination for file`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(201))
+
+        client.rename("/folder/aaa.mp4", "bbb.mp4")
+
+        // 先消费 connect 探测产生的 PROPFIND 请求
+        val probeRequest = mockWebServer.takeRequest()
+        assertEquals("PROPFIND", probeRequest.method)
+        // 再获取 MOVE 请求
+        val recordedRequest = mockWebServer.takeRequest()
+        assertEquals("MOVE", recordedRequest.method)
+        // 文件 URL 不应以 / 结尾
+        assertEquals("/webdav/folder/aaa.mp4", recordedRequest.path)
+        val destination = recordedRequest.getHeader("Destination")
+        assertNotNull(destination)
+        // 重命名后目标 URL 应为同一目录下的新名称，且不带尾斜杠
+        assertEquals("${mockWebServer.url("/webdav/folder/bbb.mp4")}", destination)
+    }
+
+    @Test
+    fun `rename sends MOVE request with renamed Destination for directory`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(201))
+
+        client.rename("/folder/subdir", "newdir", isDirectory = true)
+
+        // 先消费 connect 探测产生的 PROPFIND 请求
+        val probeRequest = mockWebServer.takeRequest()
+        assertEquals("PROPFIND", probeRequest.method)
+        // 再获取 MOVE 请求
+        val recordedRequest = mockWebServer.takeRequest()
+        assertEquals("MOVE", recordedRequest.method)
+        assertEquals("/webdav/folder/subdir/", recordedRequest.path)
+        val destination = recordedRequest.getHeader("Destination")
+        assertNotNull(destination)
+        assertEquals("${mockWebServer.url("/webdav/folder/newdir/")}", destination)
+    }
+
+    @Test
+    fun `deleteResource sends DELETE request for file without trailing slash`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(204))
+
+        client.deleteResource("/folder/aaa.mp4")
+
+        // 先消费 connect 探测产生的 PROPFIND 请求
+        val probeRequest = mockWebServer.takeRequest()
+        assertEquals("PROPFIND", probeRequest.method)
+        // 再获取 DELETE 请求
+        val recordedRequest = mockWebServer.takeRequest()
+        assertEquals("DELETE", recordedRequest.method)
+        assertEquals("/webdav/folder/aaa.mp4", recordedRequest.path)
+    }
+
+    @Test
+    fun `deleteResource sends DELETE request for directory with trailing slash`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(204))
+
+        client.deleteResource("/folder/subdir", isDirectory = true)
+
+        // 先消费 connect 探测产生的 PROPFIND 请求
+        val probeRequest = mockWebServer.takeRequest()
+        assertEquals("PROPFIND", probeRequest.method)
+        // 再获取 DELETE 请求
+        val recordedRequest = mockWebServer.takeRequest()
+        assertEquals("DELETE", recordedRequest.method)
+        assertEquals("/webdav/folder/subdir/", recordedRequest.path)
+    }
+
+    @Test
+    fun `deleteResource throws OperationFailed for 409 conflict`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(409))
+
+        val exception = assertThrows(WebDAVException.OperationFailed::class.java) {
+            client.deleteResource("/folder/aaa.mp4")
+        }
+        assertNotNull(exception)
+    }
+
+    @Test
+    fun `deleteResource throws AuthenticationFailed for 401`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(401))
+
+        val exception = assertThrows(WebDAVException.AuthenticationFailed::class.java) {
+            client.deleteResource("/folder/aaa.mp4")
+        }
+        assertNotNull(exception)
+    }
+
+    @Test
+    fun `moveResource throws UnsupportedOperation for autoindex server`() = runTest {
+        val config = ServerConfig(
+            name = "Test",
+            url = mockWebServer.url("/").toString().trimEnd('/')
+        )
+        // 先用 PROPFIND 建立连接和配置
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(207)
+                .setBody("<?xml version=\"1.0\"?><D:multistatus xmlns:D=\"DAV:\"></D:multistatus>")
+        )
+        client.connect(config)
+        // 再强制标记为 autoindex 服务器
+        client.setServerType(ServerType.AUTOINDEX)
+
+        val exception = assertThrows(WebDAVException.UnsupportedOperation::class.java) {
+            client.moveResource("/folder/aaa.mp4", "/videos")
+        }
+        assertNotNull(exception)
+    }
 }

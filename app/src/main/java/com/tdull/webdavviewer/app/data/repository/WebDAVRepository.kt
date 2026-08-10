@@ -41,4 +41,27 @@ interface WebDAVRepository {
      * @return 预览图URL列表
      */
     suspend fun getVideoPreviews(videoPath: String): Result<List<String>>
+    
+    /**
+     * 重命名文件或文件夹
+     * @param resource 要重命名的资源
+     * @param newName 新的名称
+     * @return 操作结果
+     */
+    suspend fun rename(resource: WebDAVResource, newName: String): Result<Unit>
+    
+    /**
+     * 移动文件或文件夹到目标目录
+     * @param resource 要移动的资源
+     * @param destinationDir 目标目录路径
+     * @return 操作结果
+     */
+    suspend fun move(resource: WebDAVResource, destinationDir: String): Result<Unit>
+    
+    /**
+     * 删除文件或文件夹
+     * @param resource 要删除的资源
+     * @return 操作结果
+     */
+    suspend fun delete(resource: WebDAVResource): Result<Unit>
 }

@@ -99,6 +99,18 @@ object ErrorHandler {
                 message = context.getString(R.string.error_server_error_message, throwable.statusCode),
                 canRetry = true
             )
+            is WebDAVException.OperationFailed -> ErrorInfo(
+                type = ErrorType.SERVER_ERROR,
+                title = context.getString(R.string.error_server_error_title),
+                message = throwable.message,
+                canRetry = true
+            )
+            is WebDAVException.UnsupportedOperation -> ErrorInfo(
+                type = ErrorType.SERVER_ERROR,
+                title = context.getString(R.string.error_server_error_title),
+                message = context.getString(R.string.error_unsupported_operation_message),
+                canRetry = false
+            )
             
             // 网络相关异常
             is SocketTimeoutException -> ErrorInfo(

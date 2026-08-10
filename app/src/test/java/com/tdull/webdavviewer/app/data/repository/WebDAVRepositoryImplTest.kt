@@ -236,4 +236,122 @@ class WebDAVRepositoryImplTest {
         verify(mockClient, times(2)).listFiles("/path1")
         verify(mockClient, times(2)).listFiles("/path2")
     }
+
+    // ========== rename / move / delete 测试 ==========
+
+    private fun createResource(path: String, name: String, isDirectory: Boolean = false) =
+        WebDAVResource(path = path, name = name, isDirectory = isDirectory)
+
+    @Test
+    fun `rename delegates to client and returns success for file`() = runTest {
+        val resource = createResource("/folder/aaa.mp4", "aaa.mp4")
+
+        val result = repository.rename(resource, "bbb.mp4")
+
+        assertTrue(result.isSuccess)
+        verify(mockClient).rename("/folder/aaa.mp4", "bbb.mp4", false)
+    }
+
+    @Test
+    fun `rename delegates to client and returns success for directory`() = runTest {
+        val resource = createResource("/folder/subdir", "subdir", isDirectory = true)
+
+        val result = repository.rename(resource, "newdir")
+
+        assertTrue(result.isSuccess)
+        verify(mockClient).rename("/folder/subdir", "newdir", true)
+    }
+
+    @Test
+    fun `rename returns failure when client throws exception`() = runTest {
+        val resource = createResource("/folder/aaa.mp4", "aaa.mp4")
+        `when`(mockClient.rename("/folder/aaa.mp4", "bbb.mp4", false))
+            .thenThrow(RuntimeException("模拟异常"))
+
+        val result = repository.rename(resource, "bbb.mp4")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is WebDAVException.ConnectionFailed)
+    }
+
+    @Test
+    fun `rename clears source directory cache`() = runTest {
+        val sourceDirFiles = listOf(createResource("/folder/aaa.mp4", "aaa.mp4"))
+        `when`(mockClient.listFiles("/folder/")).thenReturn(sourceDirFiles)
+
+        // 先加载并缓存源目录
+        repository.listFiles("/folder/")
+        verify(mockClient, times(1)).listFiles("/folder/")
+
+        val resource = createResource("/folder/aaa.mp4", "aaa.mp4")
+        repository.rename(resource, "bbb.mp4")
+
+        // 重命名后再次加载源目录应重新调用 client（缓存已清除）
+        repository.listFiles("/folder/")
+        verify(mockClient, times(2)).listFiles("/folder/")
+    }
+
+    @Test
+    fun `move delegates to client and returns success for file`() = runTest {
+        val resource = createResource("/folder/aaa.mp4", "aaa.mp4")
+
+        val result = repository.move(resource, "/videos")
+
+        assertTrue(result.isSuccess)
+        verify(mockClient).moveResource("/folder/aaa.mp4", "/videos", false)
+    }
+
+    @Test
+    fun `move delegates to client and returns success for directory`() = runTest {
+        val resource = createResource("/folder/subdir", "subdir", isDirectory = true)
+
+        val result = repository.move(resource, "/videos")
+
+        assertTrue(result.isSuccess)
+        verify(mockClient).moveResource("/folder/subdir", "/videos", true)
+    }
+
+    @Test
+    fun `move returns failure when client throws exception`() = runTest {
+        val resource = createResource("/folder/aaa.mp4", "aaa.mp4")
+        `when`(mockClient.moveResource("/folder/aaa.mp4", "/videos", false))
+            .thenThrow(RuntimeException("模拟异常"))
+
+        val result = repository.move(resource, "/videos")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is WebDAVException.ConnectionFailed)
+    }
+
+    @Test
+    fun `delete delegates to client and returns success for file`() = runTest {
+        val resource = createResource("/folder/aaa.mp4", "aaa.mp4")
+
+        val result = repository.delete(resource)
+
+        assertTrue(result.isSuccess)
+        verify(mockClient).deleteResource("/folder/aaa.mp4", false)
+    }
+
+    @Test
+    fun `delete delegates to client and returns success for directory`() = runTest {
+        val resource = createResource("/folder/subdir", "subdir", isDirectory = true)
+
+        val result = repository.delete(resource)
+
+        assertTrue(result.isSuccess)
+        verify(mockClient).deleteResource("/folder/subdir", true)
+    }
+
+    @Test
+    fun `delete returns failure when client throws exception`() = runTest {
+        val resource = createResource("/folder/aaa.mp4", "aaa.mp4")
+        `when`(mockClient.deleteResource("/folder/aaa.mp4", false))
+            .thenThrow(RuntimeException("模拟异常"))
+
+        val result = repository.delete(resource)
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is WebDAVException.ConnectionFailed)
+    }
 }
