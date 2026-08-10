@@ -171,6 +171,12 @@ class WebDAVClientTest {
             </D:multistatus>
         """.trimIndent()
 
+        // 第一个响应给 connect 的 PROPFIND 探测，第二个响应给 listFiles
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(207)
+                .setBody("<?xml version=\"1.0\"?><D:multistatus xmlns:D=\"DAV:\"></D:multistatus>")
+        )
         mockWebServer.enqueue(
             MockResponse()
                 .setResponseCode(207)
@@ -194,7 +200,63 @@ class WebDAVClientTest {
     }
 
     @Test
+    fun `listFiles filters out hidden files and directories starting with dot`() = runTest {
+        // 使用 autoindex（HTML）模式：不依赖单元测试中不可用的 XmlPullParser
+        val htmlResponse = """
+            <html><head><title>Index of /</title></head>
+            <body>
+                <a href="visible.txt">visible.txt</a>  10-Aug-2026 10:00  10
+                <a href=".hiddenfile">.hiddenfile</a>  10-Aug-2026 10:00  10
+                <a href=".hiddendir/">.hiddendir/</a>  10-Aug-2026 10:00  -
+                <a href="normaldir/">normaldir/</a>  10-Aug-2026 10:00  -
+            </body>
+            </html>
+        """.trimIndent()
+
+        // 第一个响应给 connect 的 PROPFIND 探测（405 → 触发 autoindex 探测）
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(405)
+                .setBody("Method Not Allowed")
+        )
+        // 第二个响应给 connect 的 autoindex GET 探测（HTML 目录列表 → 判定 autoindex）
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(htmlResponse)
+        )
+        // 第三个响应给 listFiles 的 GET 请求
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(200)
+                .setBody(htmlResponse)
+        )
+
+        val config = ServerConfig(
+            name = "Test",
+            url = mockWebServer.url("/webdav/").toString().trimEnd('/')
+        )
+
+        client.connect(config)
+        val files = client.listFiles("/")
+
+        // 只应包含非隐藏文件/目录
+        val names = files.map { it.name }
+        assertTrue(names.contains("visible.txt"))
+        assertTrue(names.contains("normaldir"))
+        assertFalse(names.contains(".hiddenfile"))
+        assertFalse(names.contains(".hiddendir"))
+    }
+
+    @Test
     fun `listFiles throws AuthenticationFailed for 401`() = runTest {
+        // 第一个响应给 connect 的 PROPFIND 探测（207 → 判定 PROPFIND）
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(207)
+                .setBody("<?xml version=\"1.0\"?><D:multistatus xmlns:D=\"DAV:\"></D:multistatus>")
+        )
+        // 第二个响应给 listFiles 的 PROPFIND（401 → 抛 AuthenticationFailed）
         mockWebServer.enqueue(
             MockResponse()
                 .setResponseCode(401)
@@ -216,6 +278,13 @@ class WebDAVClientTest {
 
     @Test
     fun `listFiles throws ResourceNotFound for 404`() = runTest {
+        // 第一个响应给 connect 的 PROPFIND 探测（207 → 判定 PROPFIND）
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(207)
+                .setBody("<?xml version=\"1.0\"?><D:multistatus xmlns:D=\"DAV:\"></D:multistatus>")
+        )
+        // 第二个响应给 listFiles 的 PROPFIND（404 → 抛 ResourceNotFound）
         mockWebServer.enqueue(
             MockResponse()
                 .setResponseCode(404)
@@ -252,6 +321,13 @@ class WebDAVClientTest {
 
     @Test
     fun `listFiles throws InvalidResponse for empty body`() = runTest {
+        // 第一个响应给 connect 的 PROPFIND 探测（207 → 判定 PROPFIND）
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(207)
+                .setBody("<?xml version=\"1.0\"?><D:multistatus xmlns:D=\"DAV:\"></D:multistatus>")
+        )
+        // 第二个响应给 listFiles 的 PROPFIND（207 但空 body → 解析为空，无有效资源）
         mockWebServer.enqueue(
             MockResponse()
                 .setResponseCode(207)
@@ -310,7 +386,8 @@ class WebDAVClientTest {
 
         val recordedRequest = mockWebServer.takeRequest()
         assertEquals("PROPFIND", recordedRequest.method)
-        assertEquals("1", recordedRequest.getHeader("Depth"))
+        // testConnection 使用 Depth=0 探测
+        assertEquals("0", recordedRequest.getHeader("Depth"))
         assertNotNull(recordedRequest.getHeader("Content-Type"))
     }
 

@@ -168,6 +168,9 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
     testImplementation("app.cash.turbine:turbine:1.0.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    // 单元测试中提供 XmlPullParser 实现（Android 运行时自带，但 JVM 单元测试环境缺失）
+    testImplementation("xmlpull:xmlpull:1.1.3.1")
+    testImplementation("xpp3:xpp3:1.1.4c")
     
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")

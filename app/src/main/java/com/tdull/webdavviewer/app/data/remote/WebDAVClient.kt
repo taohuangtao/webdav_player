@@ -198,10 +198,13 @@ class WebDAVClient @Inject constructor(
         val config = currentConfig ?: throw IllegalStateException("未配置服务器")
         val detectedType = serverType ?: detectServerType(config)
         
-        return when (detectedType) {
+        val resources = when (detectedType) {
             ServerType.PROPFIND -> listFilesViaPropfind(config, path)
             ServerType.AUTOINDEX -> listFilesViaAutoindex(config, path)
         }
+        
+        // 过滤掉以 "." 开头的隐藏文件或目录（如 .DS_Store、._xxx_screenshots 等）
+        return resources.filter { !it.name.startsWith(".") }
     }
     
     /**
