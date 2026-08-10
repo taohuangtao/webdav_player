@@ -372,7 +372,10 @@ private fun VideoPlayerView(
 ) {
     var pressStartTime by remember { mutableLongStateOf(0L) }
     var dragStartX by remember { mutableFloatStateOf(0f) }
+    var dragStartY by remember { mutableFloatStateOf(0f) }
     var isDragSeekActivated by remember { mutableStateOf(false) }
+    // 纵向手势标记：从系统顶部下拉或上下滑动时置为 true，避免误触发基于 X 轴位移的拖动 seek
+    var isVerticalGesture by remember { mutableStateOf(false) }
 
     AndroidView(
         factory = { ctx ->
@@ -394,7 +397,9 @@ private fun VideoPlayerView(
                     if (downChange != null) {
                         pressStartTime = System.currentTimeMillis()
                         dragStartX = downChange.position.x
+                        dragStartY = downChange.position.y
                         isDragSeekActivated = false
+                        isVerticalGesture = false
                         onPointerPressedChange(true)
                         downChange.consume()
 
@@ -424,12 +429,20 @@ private fun VideoPlayerView(
                                 val moveChange = changes.firstOrNull { it.pressed }
                                 if (moveChange != null) {
                                     val currentX = moveChange.position.x
+                                    val currentY = moveChange.position.y
                                     val dragDistance = currentX - dragStartX
+                                    val verticalDistance = currentY - dragStartY
                                     val absDragDistance = kotlin.math.abs(dragDistance)
+                                    val absVerticalDistance = kotlin.math.abs(verticalDistance)
                                     val currentPressDuration = System.currentTimeMillis() - pressStartTime
 
-                                    // 如果拖动距离超过20像素，且不在倍速播放状态，且按压时间少于1秒（避免与长按倍速冲突），激活拖动进度调整
-                                    if (absDragDistance > 20 && !isInFastForward && currentPressDuration < 1000) {
+                                    // 若纵向位移主导（如系统顶部下拉、上下滑动），判定为纵向手势，禁用拖动 seek
+                                    if (absVerticalDistance > absDragDistance && absVerticalDistance > 20) {
+                                        isVerticalGesture = true
+                                    }
+
+                                    // 如果拖动距离超过20像素，且不在倍速播放状态，且非纵向手势，且按压时间少于1秒（避免与长按倍速冲突），激活拖动进度调整
+                                    if (absDragDistance > 20 && !isInFastForward && !isVerticalGesture && currentPressDuration < 1000) {
                                         if (!isDragSeekActivated) {
                                             isDragSeekActivated = true
                                             viewModel.startDragSeek()

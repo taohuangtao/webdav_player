@@ -625,9 +625,13 @@ class VideoPlayerViewModel @Inject constructor(
         val state = _uiState.value
         if (state.isDragSeeking) {
             _player.value?.let { player ->
-                val newPosition = player.currentPosition + state.dragSeekOffset
-                val duration = player.duration
-                player.seekTo(newPosition.coerceIn(0L, duration))
+                val target = computeDragSeekTarget(
+                    currentPosition = player.currentPosition,
+                    dragSeekOffset = state.dragSeekOffset,
+                    duration = player.duration
+                )
+                // duration 无效（元数据未加载）时不执行 seek，避免 coerceIn 空区间崩溃
+                target?.let { player.seekTo(it) }
             }
             _uiState.update { it.copy(isDragSeeking = false, dragSeekOffset = 0L) }
         }
@@ -788,4 +792,22 @@ class VideoPlayerViewModel @Inject constructor(
         
         return factory
     }
+}
+
+/**
+ * 计算拖动 seek 的目标位置。
+ *
+ * 当 [duration] 无效（未加载或异常值，如 [androidx.media3.common.C.TIME_UNSET]）时返回 null，
+ * 调用方应跳过 seek，避免 `coerceIn` 对空区间抛异常导致崩溃。
+ * 否则返回裁剪到 [0, duration] 范围内的目标位置。
+ */
+internal fun computeDragSeekTarget(
+    currentPosition: Long,
+    dragSeekOffset: Long,
+    duration: Long
+): Long? {
+    // duration 无效（<= 0，含 C.TIME_UNSET）时不执行 seek
+    if (duration <= 0) return null
+    val target = currentPosition + dragSeekOffset
+    return target.coerceIn(0L, duration)
 }
