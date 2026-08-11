@@ -193,8 +193,11 @@ class WebDAVClient @Inject constructor(
     
     /**
      * 列出指定路径下的文件和目录
+     * @param path 目录路径
+     * @param showHidden 是否包含以 "." 开头的隐藏文件或目录（默认 false，即过滤隐藏项）
+     * @return 资源列表
      */
-    fun listFiles(path: String): List<WebDAVResource> {
+    fun listFiles(path: String, showHidden: Boolean = false): List<WebDAVResource> {
         val config = currentConfig ?: throw IllegalStateException("未配置服务器")
         val detectedType = serverType ?: detectServerType(config)
         
@@ -203,8 +206,13 @@ class WebDAVClient @Inject constructor(
             ServerType.AUTOINDEX -> listFilesViaAutoindex(config, path)
         }
         
-        // 过滤掉以 "." 开头的隐藏文件或目录（如 .DS_Store、._xxx_screenshots 等）
-        return resources.filter { !it.name.startsWith(".") }
+        // 默认过滤掉以 "." 开头的隐藏文件或目录（如 .DS_Store、._xxx_screenshots 等）
+        // showHidden=true 时保留隐藏项
+        return if (showHidden) {
+            resources
+        } else {
+            resources.filter { !it.name.startsWith(".") }
+        }
     }
     
     /**

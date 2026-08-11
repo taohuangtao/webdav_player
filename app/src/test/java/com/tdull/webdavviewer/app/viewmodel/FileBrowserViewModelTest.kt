@@ -131,7 +131,7 @@ class FileBrowserViewModelTest {
         )
 
         whenever(mockWebDavRepository.connect(config)).thenReturn(Result.success(Unit))
-        whenever(mockWebDavRepository.listFiles("/")).thenReturn(Result.success(files))
+        whenever(mockWebDavRepository.listFiles("/", false)).thenReturn(Result.success(files))
 
         viewModel.selectServer(config)
 
@@ -193,8 +193,8 @@ class FileBrowserViewModelTest {
             WebDAVResource(path = "/subfolder/file.txt", name = "file.txt", isDirectory = false)
         )
         // selectServer 成功后会加载根目录，navigateTo 会加载目标目录，均需 stub
-        whenever(mockWebDavRepository.listFiles("/")).thenReturn(Result.success(emptyList()))
-        whenever(mockWebDavRepository.listFiles("/subfolder")).thenReturn(Result.success(files))
+        whenever(mockWebDavRepository.listFiles("/", false)).thenReturn(Result.success(emptyList()))
+        whenever(mockWebDavRepository.listFiles("/subfolder", false)).thenReturn(Result.success(files))
 
         // 先连接服务器
         val config = ServerConfig(name = "Test", url = "https://example.com")
@@ -204,14 +204,14 @@ class FileBrowserViewModelTest {
         viewModel.navigateTo("/subfolder")
 
         assertEquals("/subfolder", viewModel.currentPath.value)
-        verify(mockWebDavRepository).listFiles("/subfolder")
+        verify(mockWebDavRepository).listFiles("/subfolder", false)
     }
 
     // ========== navigateUp 测试 ==========
 
     @Test
     fun `navigateUp returns to previous path`() = runTest {
-        whenever(mockWebDavRepository.listFiles(any())).thenReturn(Result.success(emptyList()))
+        whenever(mockWebDavRepository.listFiles(any(), any<Boolean>())).thenReturn(Result.success(emptyList()))
 
         // 先连接服务器
         val config = ServerConfig(name = "Test", url = "https://example.com")
@@ -228,7 +228,7 @@ class FileBrowserViewModelTest {
 
     @Test
     fun `navigateUp stays at root when already at root`() = runTest {
-        whenever(mockWebDavRepository.listFiles(any())).thenReturn(Result.success(emptyList()))
+        whenever(mockWebDavRepository.listFiles(any(), any<Boolean>())).thenReturn(Result.success(emptyList()))
 
         val config = ServerConfig(name = "Test", url = "https://example.com")
         viewModel.selectServer(config)
@@ -242,7 +242,7 @@ class FileBrowserViewModelTest {
 
     @Test
     fun `refresh reloads current directory`() = runTest {
-        whenever(mockWebDavRepository.listFiles("/")).thenReturn(Result.success(emptyList()))
+        whenever(mockWebDavRepository.listFiles("/", false)).thenReturn(Result.success(emptyList()))
 
         val config = ServerConfig(name = "Test", url = "https://example.com")
         whenever(mockWebDavRepository.connect(config)).thenReturn(Result.success(Unit))
@@ -251,7 +251,7 @@ class FileBrowserViewModelTest {
         viewModel.refresh()
 
         // selectServer 成功后自动加载一次根目录，refresh 再加载一次，共 2 次
-        verify(mockWebDavRepository, times(2)).listFiles("/")
+        verify(mockWebDavRepository, times(2)).listFiles("/", false)
     }
 
     // ========== getStreamUrl 测试 ==========
@@ -264,6 +264,111 @@ class FileBrowserViewModelTest {
         val result = viewModel.getStreamUrl("/video.mp4")
 
         assertEquals(expectedUrl, result)
+    }
+
+    // ========== 隐藏文件显示测试 ==========
+
+    /**
+     * 构造包含隐藏文件与普通文件的目录列表
+     */
+    private fun buildFilesWithHidden(): List<WebDAVResource> {
+        return listOf(
+            WebDAVResource(path = "/folder", name = "folder", isDirectory = true),
+            WebDAVResource(path = "/file.txt", name = "file.txt", isDirectory = false),
+            WebDAVResource(path = "/.DS_Store", name = ".DS_Store", isDirectory = false),
+            WebDAVResource(path = "/.hidden_dir", name = ".hidden_dir", isDirectory = true),
+            WebDAVResource(path = "/.gitignore", name = ".gitignore", isDirectory = false)
+        )
+    }
+
+    @Test
+    fun `showHidden defaults to false`() {
+        assertFalse(viewModel.uiState.value.showHidden)
+    }
+
+    @Test
+    fun `loadFiles passes showHidden=false by default`() = runTest {
+        val config = ServerConfig(name = "Test", url = "https://example.com")
+        whenever(mockWebDavRepository.connect(config)).thenReturn(Result.success(Unit))
+        // 数据层已按 showHidden=false 返回过滤后的普通文件列表
+        val filteredFiles = listOf(
+            WebDAVResource(path = "/folder", name = "folder", isDirectory = true),
+            WebDAVResource(path = "/file.txt", name = "file.txt", isDirectory = false)
+        )
+        whenever(mockWebDavRepository.listFiles("/", false)).thenReturn(Result.success(filteredFiles))
+
+        viewModel.selectServer(config)
+
+        verify(mockWebDavRepository).listFiles("/", false)
+        val names = viewModel.uiState.value.files.map { it.name }
+        assertFalse("默认状态下不应包含隐藏文件: $names", names.count { it.startsWith(".") } > 0)
+        assertTrue(names.contains("folder"))
+        assertTrue(names.contains("file.txt"))
+    }
+
+    @Test
+    fun `toggleShowHidden flips state and reloads current directory`() = runTest {
+        val config = ServerConfig(name = "Test", url = "https://example.com")
+        whenever(mockWebDavRepository.connect(config)).thenReturn(Result.success(Unit))
+        whenever(mockWebDavRepository.listFiles("/", false)).thenReturn(Result.success(emptyList()))
+        whenever(mockWebDavRepository.listFiles("/", true)).thenReturn(Result.success(emptyList()))
+
+        viewModel.selectServer(config)
+        assertFalse(viewModel.uiState.value.showHidden)
+
+        viewModel.toggleShowHidden()
+        assertTrue(viewModel.uiState.value.showHidden)
+        verify(mockWebDavRepository).listFiles("/", true)
+
+        viewModel.toggleShowHidden()
+        assertFalse(viewModel.uiState.value.showHidden)
+        // listFiles("/", false) 在 selectServer 连接后加载根目录时调用过 1 次，二次 toggle 后再调用 1 次，共 2 次
+        verify(mockWebDavRepository, times(2)).listFiles("/", false)
+    }
+
+    @Test
+    fun `loadFiles requests showHidden=true and exposes hidden files`() = runTest {
+        val config = ServerConfig(name = "Test", url = "https://example.com")
+        whenever(mockWebDavRepository.connect(config)).thenReturn(Result.success(Unit))
+        whenever(mockWebDavRepository.listFiles("/", false)).thenReturn(Result.success(emptyList()))
+        // 开启 showHidden 后数据层返回含隐藏文件的列表
+        val filesWithHidden = listOf(
+            WebDAVResource(path = "/.hidden_dir", name = ".hidden_dir", isDirectory = true),
+            WebDAVResource(path = "/.DS_Store", name = ".DS_Store", isDirectory = false),
+            WebDAVResource(path = "/file.txt", name = "file.txt", isDirectory = false)
+        )
+        whenever(mockWebDavRepository.listFiles("/", true)).thenReturn(Result.success(filesWithHidden))
+
+        viewModel.selectServer(config)
+        viewModel.toggleShowHidden()
+
+        val names = viewModel.uiState.value.files.map { it.name }
+        assertTrue("showHidden=true 时应包含隐藏文件: $names", names.contains(".DS_Store"))
+        assertTrue(names.contains(".hidden_dir"))
+        assertTrue(names.contains("file.txt"))
+    }
+
+    @Test
+    fun `sort order preserved when hidden files are shown`() = runTest {
+        val config = ServerConfig(name = "Test", url = "https://example.com")
+        whenever(mockWebDavRepository.connect(config)).thenReturn(Result.success(Unit))
+        whenever(mockWebDavRepository.listFiles("/", false)).thenReturn(Result.success(emptyList()))
+        val filesWithHidden = listOf(
+            WebDAVResource(path = "/.hidden_dir", name = ".hidden_dir", isDirectory = true),
+            WebDAVResource(path = "/file.txt", name = "file.txt", isDirectory = false),
+            WebDAVResource(path = "/.DS_Store", name = ".DS_Store", isDirectory = false)
+        )
+        whenever(mockWebDavRepository.listFiles("/", true)).thenReturn(Result.success(filesWithHidden))
+
+        viewModel.selectServer(config)
+        viewModel.toggleShowHidden()
+
+        val state = viewModel.uiState.value
+        // 排序规则：目录在前，随后文件按名称升序（大小写不敏感）
+        // 目录：.hidden_dir；文件按 lowercase 升序：.DS_Store(.ds_store) < file.txt
+        val expectedOrder = listOf(".hidden_dir", ".DS_Store", "file.txt")
+        val actualNames = state.files.map { it.name }
+        assertEquals("排序应按目录在前、名称升序", expectedOrder, actualNames)
     }
 
     // ========== clearError 测试 ==========

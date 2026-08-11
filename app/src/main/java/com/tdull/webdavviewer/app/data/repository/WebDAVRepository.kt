@@ -17,9 +17,10 @@ interface WebDAVRepository {
     /**
      * 列出指定路径下的文件和目录
      * @param path 目录路径
+     * @param showHidden 是否包含以 "." 开头的隐藏文件或目录（默认 false，即过滤隐藏项）
      * @return 资源列表
      */
-    suspend fun listFiles(path: String): Result<List<WebDAVResource>>
+    suspend fun listFiles(path: String, showHidden: Boolean = false): Result<List<WebDAVResource>>
     
     /**
      * 获取文件的流媒体URL

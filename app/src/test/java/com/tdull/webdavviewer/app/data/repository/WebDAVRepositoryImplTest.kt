@@ -92,13 +92,13 @@ class WebDAVRepositoryImplTest {
             )
         )
         
-        `when`(mockClient.listFiles("/")).thenReturn(files)
+        `when`(mockClient.listFiles("/", false)).thenReturn(files)
         
         val result = repository.listFiles("/")
         
         assertTrue(result.isSuccess)
         assertEquals(2, result.getOrNull()?.size)
-        verify(mockClient).listFiles("/")
+        verify(mockClient).listFiles("/", false)
     }
 
     @Test
@@ -111,7 +111,7 @@ class WebDAVRepositoryImplTest {
             )
         )
         
-        `when`(mockClient.listFiles("/")).thenReturn(files)
+        `when`(mockClient.listFiles("/", false)).thenReturn(files)
         
         // 第一次调用
         val result1 = repository.listFiles("/")
@@ -122,13 +122,50 @@ class WebDAVRepositoryImplTest {
         assertTrue(result2.isSuccess)
         
         // 只调用一次 client.listFiles
-        verify(mockClient, times(1)).listFiles("/")
+        verify(mockClient, times(1)).listFiles("/", false)
+    }
+
+    @Test
+    fun `listFiles passes showHidden to client`() = runTest {
+        val files = listOf(
+            WebDAVResource(path = "/.hidden", name = ".hidden", isDirectory = false)
+        )
+        `when`(mockClient.listFiles("/", true)).thenReturn(files)
+
+        val result = repository.listFiles("/", true)
+
+        assertTrue(result.isSuccess)
+        assertEquals(1, result.getOrNull()?.size)
+        verify(mockClient).listFiles("/", true)
+    }
+
+    @Test
+    fun `cache separates showHidden variants for same path`() = runTest {
+        val filteredFiles = listOf(WebDAVResource(path = "/file.txt", name = "file.txt", isDirectory = false))
+        val allFiles = listOf(
+            WebDAVResource(path = "/file.txt", name = "file.txt", isDirectory = false),
+            WebDAVResource(path = "/.hidden", name = ".hidden", isDirectory = false)
+        )
+        `when`(mockClient.listFiles("/", false)).thenReturn(filteredFiles)
+        `when`(mockClient.listFiles("/", true)).thenReturn(allFiles)
+
+        // showHidden=false 加载一次
+        repository.listFiles("/", false)
+        // showHidden=true 加载一次
+        repository.listFiles("/", true)
+
+        // 再以相同参数加载，应命中各自缓存，client 各自只被调用一次
+        repository.listFiles("/", false)
+        repository.listFiles("/", true)
+
+        verify(mockClient, times(1)).listFiles("/", false)
+        verify(mockClient, times(1)).listFiles("/", true)
     }
 
     @Test
     fun `listFiles returns failure when client throws exception`() = runTest {
         // 客户端抛非受检异常时，仓库应包装为 ConnectionFailed 失败结果
-        `when`(mockClient.listFiles("/")).thenThrow(RuntimeException("模拟列表异常"))
+        `when`(mockClient.listFiles("/", false)).thenThrow(RuntimeException("模拟列表异常"))
 
         val result = repository.listFiles("/")
 
@@ -202,7 +239,7 @@ class WebDAVRepositoryImplTest {
             )
         )
         
-        `when`(mockClient.listFiles("/")).thenReturn(files)
+        `when`(mockClient.listFiles("/", false)).thenReturn(files)
         
         // 加载并缓存
         repository.listFiles("/")
@@ -213,7 +250,7 @@ class WebDAVRepositoryImplTest {
         // 再次加载应该重新调用 client
         repository.listFiles("/")
         
-        verify(mockClient, times(2)).listFiles("/")
+        verify(mockClient, times(2)).listFiles("/", false)
     }
 
     @Test
@@ -221,8 +258,8 @@ class WebDAVRepositoryImplTest {
         val files1 = listOf(WebDAVResource(path = "/file1.txt", name = "file1.txt", isDirectory = false))
         val files2 = listOf(WebDAVResource(path = "/file2.txt", name = "file2.txt", isDirectory = false))
         
-        `when`(mockClient.listFiles("/path1")).thenReturn(files1)
-        `when`(mockClient.listFiles("/path2")).thenReturn(files2)
+        `when`(mockClient.listFiles("/path1", false)).thenReturn(files1)
+        `when`(mockClient.listFiles("/path2", false)).thenReturn(files2)
         
         // 加载并缓存两个路径
         repository.listFiles("/path1")
@@ -235,8 +272,8 @@ class WebDAVRepositoryImplTest {
         repository.listFiles("/path1")
         repository.listFiles("/path2")
         
-        verify(mockClient, times(2)).listFiles("/path1")
-        verify(mockClient, times(2)).listFiles("/path2")
+        verify(mockClient, times(2)).listFiles("/path1", false)
+        verify(mockClient, times(2)).listFiles("/path2", false)
     }
 
     // ========== rename / move / delete 测试 ==========
@@ -279,18 +316,18 @@ class WebDAVRepositoryImplTest {
     @Test
     fun `rename clears source directory cache`() = runTest {
         val sourceDirFiles = listOf(createResource("/folder/aaa.mp4", "aaa.mp4"))
-        `when`(mockClient.listFiles("/folder/")).thenReturn(sourceDirFiles)
+        `when`(mockClient.listFiles("/folder/", false)).thenReturn(sourceDirFiles)
 
         // 先加载并缓存源目录
         repository.listFiles("/folder/")
-        verify(mockClient, times(1)).listFiles("/folder/")
+        verify(mockClient, times(1)).listFiles("/folder/", false)
 
         val resource = createResource("/folder/aaa.mp4", "aaa.mp4")
         repository.rename(resource, "bbb.mp4")
 
         // 重命名后再次加载源目录应重新调用 client（缓存已清除）
         repository.listFiles("/folder/")
-        verify(mockClient, times(2)).listFiles("/folder/")
+        verify(mockClient, times(2)).listFiles("/folder/", false)
     }
 
     @Test

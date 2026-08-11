@@ -53,17 +53,20 @@ class WebDAVRepositoryImpl @Inject constructor(
         }
     }
     
-    override suspend fun listFiles(path: String): Result<List<WebDAVResource>> = withContext(Dispatchers.IO) {
+    override suspend fun listFiles(path: String, showHidden: Boolean): Result<List<WebDAVResource>> = withContext(Dispatchers.IO) {
+        // 缓存键需区分 showHidden，避免全量/过滤数据互相污染
+        val cacheKey = buildCacheKey(path, showHidden)
+
         // 检查缓存
-        val cachedResult = getCachedResult(path)
+        val cachedResult = getCachedResult(cacheKey)
         if (cachedResult != null) {
             return@withContext Result.success(cachedResult)
         }
         
         try {
-            val files = client.listFiles(path)
+            val files = client.listFiles(path, showHidden)
             // 更新缓存
-            setCachedResult(path, files)
+            setCachedResult(cacheKey, files)
             Result.success(files)
         } catch (e: WebDAVException) {
             Result.failure(e)
@@ -172,14 +175,23 @@ class WebDAVRepositoryImpl @Inject constructor(
     }
     
     /**
-     * 清除指定路径的缓存
+     * 清除指定路径的缓存（含该路径下所有 showHidden 变体的缓存条目）
      */
     suspend fun clearCache(path: String) {
         cacheMutex.withLock {
-            cache.remove(path)
+            // 移除以 "path|" 为前缀的所有缓存条目（覆盖 showHidden=false/true 两种情况）
+            val prefix = "$path|"
+            cache.keys.filter { it == path || it.startsWith(prefix) }.forEach { cache.remove(it) }
         }
     }
-    
+
+    /**
+     * 构建缓存键，区分同路径下不同 showHidden 的过滤结果
+     */
+    private fun buildCacheKey(path: String, showHidden: Boolean): String {
+        return "$path|$showHidden"
+    }
+
     /**
      * 获取资源所在的父目录路径
      * "/movies/aaa.mp4" -> "/movies/"

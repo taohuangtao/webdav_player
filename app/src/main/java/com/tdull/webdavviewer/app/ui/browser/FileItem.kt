@@ -44,6 +44,7 @@ fun FileItem(
     onRetryClick: () -> Unit = {},
     onCancelDownload: () -> Unit = {},
     onMoreClick: () -> Unit = {},
+    fileMissing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val icon = getResourceIcon(resource.resourceType)
@@ -113,6 +114,16 @@ fun FileItem(
                                 color = MaterialTheme.colorScheme.outline
                             )
                         }
+                    }
+
+                    // 文件丢失提示（下载页已下载项本地文件缺失时显示）
+                    if (fileMissing) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "文件已丢失，请重新下载",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     }
                 }
                 

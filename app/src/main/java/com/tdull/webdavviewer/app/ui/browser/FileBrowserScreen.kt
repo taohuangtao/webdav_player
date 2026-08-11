@@ -17,6 +17,8 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -117,6 +119,25 @@ fun FileBrowserScreen(
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.weight(1f)
                     )
+                    // 显示/隐藏文件切换按钮
+                    IconButton(
+                        onClick = { viewModel.toggleShowHidden() },
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        if (uiState.showHidden) {
+                            Icon(
+                                imageVector = Icons.Default.Visibility,
+                                contentDescription = "隐藏隐藏文件",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Outlined.VisibilityOff,
+                                contentDescription = "显示隐藏文件",
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
                 }
             }
         },

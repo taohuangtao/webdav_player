@@ -6,9 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.*
@@ -20,10 +18,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tdull.webdavviewer.app.data.model.DownloadItem
+import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.service.DownloadProgress
+import com.tdull.webdavviewer.app.ui.browser.FileItem
 import com.tdull.webdavviewer.app.viewmodel.DownloadsViewModel
-import java.text.SimpleDateFormat
-import java.util.*
 
 /**
  * 下载列表页面
@@ -203,12 +201,16 @@ private fun DownloadList(
                 items = downloads,
                 key = { it.id }
             ) { download ->
-                DownloadItemCard(
-                    download = download,
-                    fileExists = isFileExists(download.localPath),
+                val fileExists = isFileExists(download.localPath)
+                FileItem(
+                    resource = download.toWebDAVResource(),
                     onClick = { onDownloadClick(download) },
-                    onDelete = { onDeleteClick(download) }
+                    downloadState = DownloadState.Downloaded,
+                    onDownloadClick = { onDownloadClick(download) },
+                    fileMissing = !fileExists,
+                    onMoreClick = { onDeleteClick(download) }
                 )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
         }
     }
@@ -306,92 +308,6 @@ private fun ActiveDownloadCard(
 }
 
 /**
- * 已下载项卡片
- */
-@Composable
-private fun DownloadItemCard(
-    download: DownloadItem,
-    fileExists: Boolean,
-    onClick: () -> Unit,
-    onDelete: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        onClick = onClick,
-        enabled = fileExists
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // 图标
-            Icon(
-                imageVector = if (fileExists) Icons.Default.PlayArrow else Icons.Default.VideoFile,
-                contentDescription = if (fileExists) "视频" else "文件已丢失",
-                tint = if (fileExists) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.error,
-                modifier = Modifier.size(40.dp)
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            // 视频信息
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = download.videoTitle.ifEmpty { "未命名视频" },
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    color = if (fileExists) MaterialTheme.colorScheme.onSurface
-                           else MaterialTheme.colorScheme.outline
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                // 文件大小和下载时间
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = formatFileSize(download.fileSize),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                    Text(
-                        text = "下载于 ${formatDate(download.downloadedAt)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-
-                // 文件丢失提示
-                if (!fileExists) {
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = "文件已丢失，请重新下载",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-
-            // 删除按钮
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "删除下载",
-                    tint = MaterialTheme.colorScheme.error
-                )
-            }
-        }
-    }
-}
-
-/**
  * 处理下载项点击
  */
 private fun handleDownloadClick(
@@ -473,12 +389,4 @@ private fun formatFileSize(size: Long): String {
     }
 
     return String.format("%.1f %s", fileSize, units[unitIndex])
-}
-
-/**
- * 格式化日期
- */
-private fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
 }

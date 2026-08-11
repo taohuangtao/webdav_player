@@ -2,31 +2,20 @@ package com.tdull.webdavviewer.app.ui.favorites
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.ui.browser.FileItem
 import com.tdull.webdavviewer.app.viewmodel.FavoritesViewModel
-import com.tdull.webdavviewer.app.data.model.ResourceType
-import com.tdull.webdavviewer.app.data.model.WebDAVResource
-import java.text.SimpleDateFormat
-import java.util.*
 
 /**
  * 收藏列表页面
@@ -43,6 +32,9 @@ fun FavoritesScreen(
 
     // 全屏预览图状态
     var previewState by remember { mutableStateOf<PreviewState?>(null) }
+
+    // 待删除的收藏项（由更多菜单触发删除确认）
+    var deleteTarget by remember { mutableStateOf<FavoriteItem?>(null) }
 
     Scaffold(
         topBar = {
@@ -91,8 +83,8 @@ fun FavoritesScreen(
                         onLoadPreviews = { path ->
                             viewModel.loadVideoPreviews(path)
                         },
-                        onDeleteFavorite = { id ->
-                            viewModel.removeFavorite(id)
+                        onDeleteRequest = { favorite ->
+                            deleteTarget = favorite
                         }
                     )
                 }
@@ -106,6 +98,30 @@ fun FavoritesScreen(
             images = state.images,
             initialIndex = state.initialIndex,
             onDismiss = { previewState = null }
+        )
+    }
+
+    // 删除确认对话框
+    deleteTarget?.let { favorite ->
+        AlertDialog(
+            onDismissRequest = { deleteTarget = null },
+            title = { Text("确认删除") },
+            text = { Text("确定要删除这个收藏吗？") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.removeFavorite(favorite.id)
+                        deleteTarget = null
+                    }
+                ) {
+                    Text("删除", color = MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTarget = null }) {
+                    Text("取消")
+                }
+            }
         )
     }
 }
@@ -128,11 +144,11 @@ private fun FavoriteList(
     onFavoriteClick: (FavoriteItem) -> Unit,
     onPreviewClick: (List<String>, Int) -> Unit,
     onLoadPreviews: (String) -> Unit,
-    onDeleteFavorite: (String) -> Unit
+    onDeleteRequest: (FavoriteItem) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 8.dp)
+        contentPadding = PaddingValues(vertical = 0.dp)
     ) {
         items(
             items = favorites,
@@ -141,164 +157,20 @@ private fun FavoriteList(
             // 获取预览图
             val previews = videoPreviews[favorite.resourcePath] ?: emptyList()
 
-            FavoriteItemCard(
-                favorite = favorite,
-                previewImages = previews,
+            FileItem(
+                resource = favorite.toWebDAVResource(),
                 onClick = { onFavoriteClick(favorite) },
-                onPreviewClick = { index -> onPreviewClick(previews, index) },
+                previewImages = previews,
+                onPreviewClick = { images, index -> onPreviewClick(images, index) },
                 onLoadPreviews = { onLoadPreviews(favorite.resourcePath) },
-                onDelete = { onDeleteFavorite(favorite.id) }
+                isFavorite = true,
+                onFavoriteClick = {},
+                onMoreClick = { onDeleteRequest(favorite) }
             )
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         }
     }
-}
-
-/**
- * 收藏项卡片
- */
-@Composable
-private fun FavoriteItemCard(
-    favorite: FavoriteItem,
-    previewImages: List<String>,
-    onClick: () -> Unit,
-    onPreviewClick: (Int) -> Unit,
-    onLoadPreviews: () -> Unit,
-    onDelete: () -> Unit
-) {
-    var showDeleteDialog by remember { mutableStateOf(false) }
-
-    // 自动触发预览图加载
-    LaunchedEffect(favorite.id) {
-        onLoadPreviews()
-    }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Column {
-            // 主内容区域
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp)
-                    .clickable(onClick = onClick),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 图标
-                Icon(
-                    imageVector = Icons.Default.PlayArrow,
-                    contentDescription = "视频",
-                    tint = MaterialTheme.colorScheme.tertiary,
-                    modifier = Modifier.size(40.dp)
-                )
-
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // 视频信息
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = favorite.videoTitle.ifEmpty { "未命名视频" },
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    // 收藏时间
-                    Text(
-                        text = "收藏于 ${formatDate(favorite.addedAt)}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.outline
-                    )
-                }
-
-                // 删除按钮
-                IconButton(onClick = { showDeleteDialog = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "删除收藏",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-
-            // 预览图区域
-            if (previewImages.isNotEmpty()) {
-                PreviewImagesRow(
-                    images = previewImages.take(6),
-                    onImageClick = onPreviewClick
-                )
-            }
-        }
-    }
-
-    // 删除确认对话框
-    if (showDeleteDialog) {
-        AlertDialog(
-            onDismissRequest = { showDeleteDialog = false },
-            title = { Text("确认删除") },
-            text = { Text("确定要删除这个收藏吗？") },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDelete()
-                        showDeleteDialog = false
-                    }
-                ) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showDeleteDialog = false }) {
-                    Text("取消")
-                }
-            }
-        )
-    }
-}
-
-/**
- * 预览图横向列表
- */
-@Composable
-private fun PreviewImagesRow(
-    images: List<String>,
-    onImageClick: (Int) -> Unit
-) {
-    androidx.compose.foundation.lazy.LazyRow(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 12.dp, end = 12.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        items(items = images, key = { it }) { imageUrl ->
-            PreviewImageItem(
-                imageUrl = imageUrl,
-                onClick = { onImageClick(images.indexOf(imageUrl)) }
-            )
-        }
-    }
-}
-
-/**
- * 单个预览图项
- */
-@Composable
-private fun PreviewImageItem(
-    imageUrl: String,
-    onClick: () -> Unit
-) {
-    coil.compose.AsyncImage(
-        model = imageUrl,
-        contentDescription = "视频预览图",
-        modifier = Modifier
-            .size(width = 100.dp, height = 56.dp)
-            .clickable(onClick = onClick),
-        contentScale = androidx.compose.ui.layout.ContentScale.Crop
-    )
 }
 
 /**
@@ -416,12 +288,4 @@ private fun ImagePreviewDialog(
             }
         }
     }
-}
-
-/**
- * 格式化日期
- */
-private fun formatDate(timestamp: Long): String {
-    val sdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-    return sdf.format(Date(timestamp))
 }

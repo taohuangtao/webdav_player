@@ -114,6 +114,14 @@ fun VideoPlayerScreen(
                     isAppearanceLightStatusBars = true
                 }
             }
+            // 恢复跟随系统自动旋转方向
+            // toggleOrientation 会将 requestedOrientation 锁定为横/竖屏，若离开时不恢复，
+            // 整个 Activity 会保持锁定，导致文件浏览等其它页面无法跟随系统横竖屏旋转。
+            // 在配置变更(isChangingConfigurations)时恢复为 UNSPECIFIED 同样安全，因为它表示"跟随系统"。
+            val activity = context as? android.app.Activity
+            if (activity != null) {
+                activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
         }
     }
 

@@ -42,7 +42,8 @@ data class FileBrowserUiState(
     val isNetworkAvailable: Boolean = true,
     val isOperationLoading: Boolean = false,
     val operationError: String? = null,
-    val operationSuccess: String? = null
+    val operationSuccess: String? = null,
+    val showHidden: Boolean = false
 )
 
 /**
@@ -241,6 +242,15 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     /**
+     * 切换是否显示隐藏文件，切换后重新加载当前目录
+     */
+    fun toggleShowHidden() {
+        _uiState.update { it.copy(showHidden = !it.showHidden) }
+        // 缓存键已区分 showHidden，切换后 loadFiles 会以新值重新拉取对应变体数据
+        loadFiles(_currentPath.value)
+    }
+
+    /**
      * 获取流媒体URL
      */
     fun getStreamUrl(path: String): String {
@@ -302,7 +312,7 @@ class FileBrowserViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null, errorInfo = null) }
             
-            val result = webDavRepository.listFiles(path)
+            val result = webDavRepository.listFiles(path, showHidden = _uiState.value.showHidden)
             
             result.fold(
                 onSuccess = { files ->
