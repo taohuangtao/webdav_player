@@ -13,6 +13,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.ScreenRotation
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
 import androidx.compose.material.icons.filled.MoreVert
@@ -79,6 +80,19 @@ fun VideoPlayerScreen(
     val context = LocalContext.current
     val view = LocalView.current
     val window = (context as? android.app.Activity)?.window
+
+    // 手动切换横竖屏：根据当前屏幕方向取反
+    val toggleOrientation: () -> Unit = {
+        val activity = context as? android.app.Activity
+        if (activity != null) {
+            val currentOrientation = context.resources.configuration.orientation
+            activity.requestedOrientation = if (currentOrientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+            } else {
+                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            }
+        }
+    }
 
     DisposableEffect(Unit) {
         if (window != null) {
@@ -219,6 +233,7 @@ fun VideoPlayerScreen(
                 VideoPlayerTopControls(
                     title = videoTitle,
                     onBack = handleBack,
+                    onToggleOrientation = toggleOrientation,
                     modifier = Modifier.align(Alignment.TopStart)
                 )
 
@@ -496,6 +511,7 @@ private fun PlayerView.clearCanvas() {
 private fun VideoPlayerTopControls(
     title: String,
     onBack: () -> Unit,
+    onToggleOrientation: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -532,6 +548,15 @@ private fun VideoPlayerTopControls(
                     .weight(1f)
                     .padding(horizontal = 8.dp)
             )
+
+            // 横竖屏切换按钮
+            IconButton(onClick = onToggleOrientation) {
+                Icon(
+                    imageVector = Icons.Filled.ScreenRotation,
+                    contentDescription = "切换横竖屏",
+                    tint = Color.White
+                )
+            }
         }
     }
 }
