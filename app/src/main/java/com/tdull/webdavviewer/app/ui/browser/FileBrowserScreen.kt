@@ -1,9 +1,11 @@
 package com.tdull.webdavviewer.app.ui.browser
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
@@ -21,6 +23,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import android.util.Log
@@ -91,29 +94,31 @@ fun FileBrowserScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { 
-                    Column {
-                        Text("文件浏览器")
-                        if (currentPath.isNotEmpty() && currentPath != "/") {
-                            Text(
-                                text = currentPath,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                },
-                navigationIcon = {
+            // 紧凑顶部导航栏（降低高度，展示更多列表内容）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .statusBarsPadding()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
+                    Text(
+                        text = "文件浏览器",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
         },
         floatingActionButton = {
             FloatingActionButton(
@@ -302,12 +307,12 @@ private fun FileList(
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 8.dp)
+        contentPadding = PaddingValues(vertical = 0.dp)
     ) {
-        items(
+        itemsIndexed(
             items = files,
-            key = { it.path }
-        ) { resource ->
+            key = { _, item -> item.path }
+        ) { index, resource ->
             // 加载视频预览图
             val previews = if (resource.isVideo) {
                 videoPreviews[resource.path] ?: emptyList()
@@ -329,6 +334,12 @@ private fun FileList(
                 onCancelDownload = { onCancelDownload(resource) },
                 onMoreClick = { onMoreClick(resource) }
             )
+            // 行间分割线（最后一行不加，增强视觉分隔）
+            if (index < files.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 56.dp)
+                )
+            }
         }
     }
 }

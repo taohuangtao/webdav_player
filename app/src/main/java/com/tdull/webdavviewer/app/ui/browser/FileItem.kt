@@ -57,31 +57,26 @@ fun FileItem(
         }
     }
     
-    Card(
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 8.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+            .clickable(onClick = onClick)
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth()
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // 图标
-                Icon(
-                    imageVector = icon,
-                    contentDescription = getResourceTypeName(resource.resourceType),
-                    tint = iconColor,
-                    modifier = Modifier.size(40.dp)
-                )
-                
-                Spacer(modifier = Modifier.width(12.dp))
+            // 图标（缩小以压缩行高）
+            Icon(
+                imageVector = icon,
+                contentDescription = getResourceTypeName(resource.resourceType),
+                tint = iconColor,
+                modifier = Modifier.size(24.dp)
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
                 
                 // 文件信息
                 Column(
@@ -134,7 +129,7 @@ fun FileItem(
                         // 更多操作按钮
                         IconButton(
                             onClick = onMoreClick,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
@@ -153,7 +148,7 @@ fun FileItem(
                                 is DownloadState.NotDownloaded -> {
                                     IconButton(
                                         onClick = onDownloadClick,
-                                        modifier = Modifier.size(40.dp)
+                                        modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Download,
@@ -166,13 +161,13 @@ fun FileItem(
                                     Box(
                                         contentAlignment = Alignment.Center,
                                         modifier = Modifier
-                                            .size(40.dp)
+                                            .size(32.dp)
                                             .clickable(onClick = onCancelDownload)
                                     ) {
                                         CircularProgressIndicator(
                                             progress = { downloadState.progressPercent / 100f },
-                                            modifier = Modifier.size(36.dp),
-                                            strokeWidth = 3.dp,
+                                            modifier = Modifier.size(28.dp),
+                                            strokeWidth = 2.5.dp,
                                             color = MaterialTheme.colorScheme.primary
                                         )
                                         Text(
@@ -185,7 +180,7 @@ fun FileItem(
                                 is DownloadState.Downloaded -> {
                                     IconButton(
                                         onClick = onDownloadClick,
-                                        modifier = Modifier.size(40.dp)
+                                        modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Check,
@@ -197,7 +192,7 @@ fun FileItem(
                                 is DownloadState.Error -> {
                                     IconButton(
                                         onClick = onRetryClick,
-                                        modifier = Modifier.size(40.dp)
+                                        modifier = Modifier.size(32.dp)
                                     ) {
                                         Icon(
                                             imageVector = Icons.Default.Refresh,
@@ -211,7 +206,7 @@ fun FileItem(
                         // 收藏按钮
                         IconButton(
                             onClick = onFavoriteClick,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 imageVector = if (isFavorite) Icons.Default.Star else Icons.Outlined.Star,
@@ -225,7 +220,7 @@ fun FileItem(
                         // 更多操作按钮
                         IconButton(
                             onClick = onMoreClick,
-                            modifier = Modifier.size(40.dp)
+                            modifier = Modifier.size(32.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
@@ -246,7 +241,6 @@ fun FileItem(
                     }
                 )
             }
-        }
     }
 }
 

@@ -1,7 +1,7 @@
 package com.tdull.webdavviewer.app.ui.browser
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -12,7 +12,6 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -36,7 +35,7 @@ fun Breadcrumb(
         modifier = modifier
             .fillMaxWidth()
             .horizontalScroll(scrollState)
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // 根目录
@@ -79,26 +78,23 @@ private fun BreadcrumbItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    TextButton(
-        onClick = onClick,
-        enabled = !isLast,
-        modifier = modifier.padding(horizontal = 2.dp),
-        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 2.dp)
-    ) {
-        Text(
-            text = text,
-            style = if (isLast) {
-                MaterialTheme.typography.titleSmall
-            } else {
-                MaterialTheme.typography.bodyMedium
-            },
-            color = if (isLast) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-            }
-        )
-    }
+    // 用 Text + clickable 替代 TextButton，避免 40dp 最小高度约束，压缩面包屑高度
+    Text(
+        text = text,
+        style = if (isLast) {
+            MaterialTheme.typography.titleSmall
+        } else {
+            MaterialTheme.typography.bodyMedium
+        },
+        color = if (isLast) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+        },
+        modifier = modifier
+            .clickable(enabled = !isLast, onClick = onClick)
+            .padding(horizontal = 4.dp)
+    )
 }
 
 /**
