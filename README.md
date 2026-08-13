@@ -65,6 +65,7 @@ cmd 执行下面命令
 
 ```cmd
 D:\app_data\android\sdk\platform-tools\adb.exe install -r app\build\outputs\apk\release\WebDAVViewer-1.0-release.apk
+D:\app_data\android\sdk\platform-tools\adb.exe -s 10ADCJ0JKK001KC install -r app\build\outputs\apk\release\WebDAVViewer-1.0-release.apk
 ```
 ## 环境要求
 
