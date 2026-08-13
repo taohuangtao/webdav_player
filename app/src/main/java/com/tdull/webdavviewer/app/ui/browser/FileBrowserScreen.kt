@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
@@ -23,10 +25,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import android.util.Log
 import android.widget.Toast
@@ -35,6 +41,17 @@ import androidx.compose.ui.platform.LocalContext
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.viewmodel.FileBrowserViewModel
+
+// ================= 文件浏览器设计稿配色（filebrowser_redesign.html） =================
+private val SettingsBg = Color(0xFFF4F6FB)      // 页面背景
+private val CardWhite = Color(0xFFFFFFFF)        // 卡片底色
+private val TextPrimary = Color(0xFF111827)      // 主文字
+private val TextSecondary = Color(0xFF6B7280)    // 次级文字
+private val TextMuted = Color(0xFF9CA3AF)        // 弱化文字
+private val IndigoFab = Color(0xFF6366F1)        // FAB 主色
+private val IndigoPrimary = Color(0xFF4F46E5)    // indigo 主色
+private val IndigoLight = Color(0xFFEEF2FF)      // indigo 浅底
+private val DividerColor = Color(0xFFF3F4F6)     // 分割线
 
 /**
  * 文件浏览器页面
@@ -95,12 +112,13 @@ fun FileBrowserScreen(
     }
     
     Scaffold(
+        containerColor = SettingsBg,
         topBar = {
-            // 紧凑顶部导航栏（降低高度，展示更多列表内容）
+            // 紧凑顶部导航栏（设计稿风格：浅底 + 深色标题 + indigo 眼睛按钮）
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .background(SettingsBg)
                     .statusBarsPadding()
             ) {
                 Row(
@@ -111,30 +129,40 @@ fun FileBrowserScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = TextPrimary
+                        )
                     }
                     Text(
                         text = "文件浏览器",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
                         modifier = Modifier.weight(1f)
                     )
-                    // 显示/隐藏文件切换按钮
-                    IconButton(
-                        onClick = { viewModel.toggleShowHidden() },
-                        modifier = Modifier.size(40.dp)
+                    // 显示/隐藏文件切换按钮（indigo 浅底圆角方块）
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(IndigoLight, RoundedCornerShape(18.dp))
+                            .clickable { viewModel.toggleShowHidden() },
+                        contentAlignment = Alignment.Center
                     ) {
                         if (uiState.showHidden) {
                             Icon(
                                 imageVector = Icons.Default.Visibility,
                                 contentDescription = "隐藏隐藏文件",
-                                tint = MaterialTheme.colorScheme.primary
+                                tint = IndigoPrimary,
+                                modifier = Modifier.size(18.dp)
                             )
                         } else {
                             Icon(
                                 imageVector = Icons.Outlined.VisibilityOff,
                                 contentDescription = "显示隐藏文件",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                tint = IndigoPrimary,
+                                modifier = Modifier.size(18.dp)
                             )
                         }
                     }
@@ -143,7 +171,11 @@ fun FileBrowserScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { viewModel.refresh() }
+                onClick = { viewModel.refresh() },
+                containerColor = IndigoFab,
+                contentColor = Color.White,
+                shape = CircleShape,
+                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
             ) {
                 Icon(Icons.Default.Refresh, contentDescription = "刷新")
             }
@@ -160,7 +192,6 @@ fun FileBrowserScreen(
                     path = currentPath,
                     onNavigate = { path -> viewModel.navigateTo(path) }
                 )
-                HorizontalDivider()
             }
             
             // 内容区域
@@ -327,8 +358,13 @@ private fun FileList(
     onMoreClick: (WebDAVResource) -> Unit
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 0.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(CardWhite),
+        contentPadding = PaddingValues(vertical = 4.dp)
     ) {
         itemsIndexed(
             items = files,
@@ -358,7 +394,8 @@ private fun FileList(
             // 行间分割线（最后一行不加，增强视觉分隔）
             if (index < files.lastIndex) {
                 HorizontalDivider(
-                    modifier = Modifier.padding(start = 56.dp)
+                    modifier = Modifier.padding(start = 62.dp),
+                    color = DividerColor
                 )
             }
         }
@@ -396,19 +433,19 @@ private fun NotConnectedState(
                 imageVector = Icons.Default.Share,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.outline
+                tint = TextMuted
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "未连接到服务器",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.outline
+                color = TextSecondary
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "请先在设置中选择并连接服务器",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
+                color = TextMuted,
                 textAlign = TextAlign.Center
             )
             Spacer(modifier = Modifier.height(24.dp))
@@ -450,7 +487,7 @@ private fun ErrorState(
             Text(
                 text = error,
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline,
+                color = TextMuted,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(horizontal = 32.dp)
             )
@@ -478,19 +515,19 @@ private fun EmptyDirectoryState() {
                 imageVector = Icons.AutoMirrored.Filled.List,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.outline
+                tint = TextMuted
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "空目录",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.outline
+                color = TextSecondary
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "当前目录没有文件",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline
+                color = TextMuted
             )
         }
     }

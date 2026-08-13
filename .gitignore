@@ -101,3 +101,6 @@ Thumbs.db
 
 # CodeBuddy
 .codebuddy/
+
+# WorkBuddy workspace memory
+.workbuddy/

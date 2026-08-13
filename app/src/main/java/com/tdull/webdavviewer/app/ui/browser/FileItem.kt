@@ -1,5 +1,6 @@
 package com.tdull.webdavviewer.app.ui.browser
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
@@ -16,16 +17,32 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.ResourceType
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import java.text.SimpleDateFormat
 import java.util.*
+
+// ================= 文件浏览器设计稿配色（filebrowser_redesign.html） =================
+private val TextPrimary = Color(0xFF111827)      // 主文字
+private val TextSecondary = Color(0xFF6B7280)    // 次级文字
+private val TextMuted = Color(0xFF9CA3AF)        // 弱化文字
+private val IndigoPrimary = Color(0xFF4F46E5)    // indigo 主色
+private val IndigoLight = Color(0xFFEEF2FF)      // indigo 浅底
+private val RosePrimary = Color(0xFFF43F5E)      // 视频红
+private val RoseLight = Color(0xFFFFF1F2)        // 视频红浅底
+private val SkyPrimary = Color(0xFF0EA5E9)       // 图片蓝
+private val SkyLight = Color(0xFFF0F9FF)         // 图片蓝浅底
+private val AmberPrimary = Color(0xFFF59E0B)     // 文件橙
+private val AmberLight = Color(0xFFFFFBEB)       // 文件橙浅底
 
 /**
  * 文件列表项组件
@@ -69,13 +86,20 @@ fun FileItem(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 图标（缩小以压缩行高）
-            Icon(
-                imageVector = icon,
-                contentDescription = getResourceTypeName(resource.resourceType),
-                tint = iconColor,
-                modifier = Modifier.size(24.dp)
-            )
+            // 图标（彩色浅底方块，设计稿风格）
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .background(getResourceIconBg(resource.resourceType), RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = getResourceTypeName(resource.resourceType),
+                    tint = iconColor,
+                    modifier = Modifier.size(17.dp)
+                )
+            }
             
             Spacer(modifier = Modifier.width(12.dp))
                 
@@ -85,12 +109,14 @@ fun FileItem(
                 ) {
                     Text(
                         text = resource.name,
-                        style = MaterialTheme.typography.bodyLarge,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
                     )
                     
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Spacer(modifier = Modifier.height(3.dp))
                     
                     // 文件大小和修改时间
                     Row(
@@ -101,8 +127,8 @@ fun FileItem(
                         if (!resource.isDirectory) {
                             Text(
                                 text = formatFileSize(resource.size),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
+                                fontSize = 12.sp,
+                                color = TextSecondary
                             )
                         }
                         
@@ -110,8 +136,8 @@ fun FileItem(
                         if (resource.lastModified > 0) {
                             Text(
                                 text = formatDate(resource.lastModified),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
+                                fontSize = 12.sp,
+                                color = TextSecondary
                             )
                         }
                     }
@@ -135,7 +161,7 @@ fun FileItem(
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = "进入目录",
-                            tint = MaterialTheme.colorScheme.outline
+                            tint = TextMuted
                         )
                         // 更多操作按钮
                         IconButton(
@@ -145,7 +171,7 @@ fun FileItem(
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "更多操作",
-                                tint = MaterialTheme.colorScheme.outline
+                                tint = TextSecondary
                             )
                         }
                     }
@@ -164,7 +190,7 @@ fun FileItem(
                                         Icon(
                                             imageVector = Icons.Default.Download,
                                             contentDescription = "下载",
-                                            tint = MaterialTheme.colorScheme.outline
+                                            tint = TextSecondary
                                         )
                                     }
                                 }
@@ -179,12 +205,12 @@ fun FileItem(
                                             progress = { downloadState.progressPercent / 100f },
                                             modifier = Modifier.size(28.dp),
                                             strokeWidth = 2.5.dp,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = IndigoPrimary
                                         )
                                         Text(
                                             text = "${downloadState.progressPercent}%",
                                             style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = IndigoPrimary
                                         )
                                     }
                                 }
@@ -196,7 +222,7 @@ fun FileItem(
                                         Icon(
                                             imageVector = Icons.Default.Check,
                                             contentDescription = "已下载",
-                                            tint = MaterialTheme.colorScheme.primary
+                                            tint = IndigoPrimary
                                         )
                                     }
                                 }
@@ -223,9 +249,9 @@ fun FileItem(
                                 imageVector = if (isFavorite) Icons.Default.Star else Icons.Outlined.Star,
                                 contentDescription = if (isFavorite) "取消收藏" else "收藏",
                                 tint = if (isFavorite)
-                                    MaterialTheme.colorScheme.primary
+                                    IndigoPrimary
                                 else
-                                    MaterialTheme.colorScheme.outline
+                                    TextMuted
                             )
                         }
                         // 更多操作按钮
@@ -236,7 +262,7 @@ fun FileItem(
                             Icon(
                                 imageVector = Icons.Default.MoreVert,
                                 contentDescription = "更多操作",
-                                tint = MaterialTheme.colorScheme.outline
+                                tint = TextSecondary
                             )
                         }
                     }
@@ -319,11 +345,24 @@ private fun getResourceIcon(type: ResourceType): ImageVector {
 @Composable
 private fun getResourceIconColor(type: ResourceType): androidx.compose.ui.graphics.Color {
     return when (type) {
-        ResourceType.DIRECTORY -> MaterialTheme.colorScheme.primary
-        ResourceType.VIDEO -> MaterialTheme.colorScheme.tertiary
-        ResourceType.IMAGE -> MaterialTheme.colorScheme.secondary
-        ResourceType.AUDIO -> MaterialTheme.colorScheme.primary
-        ResourceType.OTHER -> MaterialTheme.colorScheme.outline
+        ResourceType.DIRECTORY -> IndigoPrimary
+        ResourceType.VIDEO -> RosePrimary
+        ResourceType.IMAGE -> SkyPrimary
+        ResourceType.AUDIO -> IndigoPrimary
+        ResourceType.OTHER -> AmberPrimary
+    }
+}
+
+/**
+ * 根据资源类型获取图标浅底色（设计稿彩色浅底方块）
+ */
+private fun getResourceIconBg(type: ResourceType): Color {
+    return when (type) {
+        ResourceType.DIRECTORY -> IndigoLight
+        ResourceType.VIDEO -> RoseLight
+        ResourceType.IMAGE -> SkyLight
+        ResourceType.AUDIO -> IndigoLight
+        ResourceType.OTHER -> AmberLight
     }
 }
 

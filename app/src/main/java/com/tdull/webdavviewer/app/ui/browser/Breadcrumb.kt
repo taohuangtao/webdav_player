@@ -16,7 +16,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+
+// 面包屑设计稿配色（filebrowser_redesign.html）
+private val TextPrimary = Color(0xFF111827)      // 主文字
+private val IndigoPrimary = Color(0xFF4F46E5)    // 末段路径 indigo
+private val TextMuted = Color(0xFF9CA3AF)        // 分隔箭头
 
 /**
  * 面包屑导航组件
@@ -51,8 +57,8 @@ fun Breadcrumb(
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
-                modifier = Modifier.size(20.dp),
-                tint = MaterialTheme.colorScheme.outline
+                modifier = Modifier.size(18.dp),
+                tint = TextMuted
             )
 
             // 计算当前层级的完整路径
@@ -87,9 +93,9 @@ private fun BreadcrumbItem(
             MaterialTheme.typography.bodyMedium
         },
         color = if (isLast) {
-            MaterialTheme.colorScheme.primary
+            IndigoPrimary
         } else {
-            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            TextPrimary.copy(alpha = 0.7f)
         },
         modifier = modifier
             .clickable(enabled = !isLast, onClick = onClick)
