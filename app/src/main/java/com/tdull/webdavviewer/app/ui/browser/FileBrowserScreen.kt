@@ -27,6 +27,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
@@ -51,6 +52,7 @@ private val TextMuted = Color(0xFF9CA3AF)        // 弱化文字
 private val IndigoFab = Color(0xFF6366F1)        // FAB 主色
 private val IndigoPrimary = Color(0xFF4F46E5)    // indigo 主色
 private val IndigoLight = Color(0xFFEEF2FF)      // indigo 浅底
+private val DeleteRed = Color(0xFFF43F5E)        // 删除红
 private val DividerColor = Color(0xFFF3F4F6)     // 分割线
 
 /**
@@ -75,8 +77,6 @@ fun FileBrowserScreen(
     // 全屏预览图状态
     var previewState by remember { mutableStateOf<PreviewState?>(null) }
     
-    // 操作菜单状态：当前选中的资源（弹出更多菜单）
-    var menuResource by remember { mutableStateOf<WebDAVResource?>(null) }
     // 重命名对话框
     var renameTarget by remember { mutableStateOf<WebDAVResource?>(null) }
     // 移动对话框
@@ -250,8 +250,14 @@ fun FileBrowserScreen(
                         onCancelDownload = { resource ->
                             viewModel.cancelDownload(resource.path)
                         },
-                        onMoreClick = { resource ->
-                            menuResource = resource
+                        onRename = { resource ->
+                            renameTarget = resource
+                        },
+                        onMove = { resource ->
+                            moveTarget = resource
+                        },
+                        onDelete = { resource ->
+                            deleteTarget = resource
                         }
                     )
                 }
@@ -265,25 +271,6 @@ fun FileBrowserScreen(
             images = state.images,
             initialIndex = state.initialIndex,
             onDismiss = { previewState = null }
-        )
-    }
-    
-    // 更多操作菜单
-    menuResource?.let { resource ->
-        OperationMenu(
-            onDismiss = { menuResource = null },
-            onRename = {
-                menuResource = null
-                renameTarget = resource
-            },
-            onMove = {
-                menuResource = null
-                moveTarget = resource
-            },
-            onDelete = {
-                menuResource = null
-                deleteTarget = resource
-            }
         )
     }
     
@@ -355,7 +342,9 @@ private fun FileList(
     onDownloadClick: (WebDAVResource) -> Unit,
     onRetryDownload: (WebDAVResource) -> Unit,
     onCancelDownload: (WebDAVResource) -> Unit,
-    onMoreClick: (WebDAVResource) -> Unit
+    onRename: (WebDAVResource) -> Unit,
+    onMove: (WebDAVResource) -> Unit,
+    onDelete: (WebDAVResource) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier
@@ -389,7 +378,14 @@ private fun FileList(
                 onDownloadClick = { onDownloadClick(resource) },
                 onRetryClick = { onRetryDownload(resource) },
                 onCancelDownload = { onCancelDownload(resource) },
-                onMoreClick = { onMoreClick(resource) }
+                moreMenuContent = { onDismiss ->
+                    OperationMenuItems(
+                        onDismiss = onDismiss,
+                        onRename = { onRename(resource) },
+                        onMove = { onMove(resource) },
+                        onDelete = { onDelete(resource) }
+                    )
+                }
             )
             // 行间分割线（最后一行不加，增强视觉分隔）
             if (index < files.lastIndex) {
@@ -569,44 +565,79 @@ private fun handleFileClick(
 }
 
 /**
- * 更多操作菜单
+ * 更多操作菜单项（在 FileItem 的 Popup 菜单容器内渲染，锚定到按钮位置）
+ * 样式与 menu_redesign.html 设计稿一致：白底 16dp 圆角容器 + 44dp 高菜单项 + indigo 图标 / 红色删除
  */
 @Composable
-private fun OperationMenu(
+private fun OperationMenuItems(
     onDismiss: () -> Unit,
     onRename: () -> Unit,
     onMove: () -> Unit,
     onDelete: () -> Unit
 ) {
-    DropdownMenu(
-        expanded = true,
-        onDismissRequest = onDismiss
+    MenuItemRow(
+        icon = Icons.Default.Create,
+        iconTint = IndigoPrimary,
+        text = "重命名",
+        textColor = TextPrimary,
+        onClick = {
+            onDismiss()
+            onRename()
+        }
+    )
+    MenuItemRow(
+        icon = Icons.AutoMirrored.Filled.DriveFileMove,
+        iconTint = IndigoPrimary,
+        text = "移动",
+        textColor = TextPrimary,
+        onClick = {
+            onDismiss()
+            onMove()
+        }
+    )
+    MenuItemRow(
+        icon = Icons.Default.Delete,
+        iconTint = DeleteRed,
+        text = "删除",
+        textColor = DeleteRed,
+        onClick = {
+            onDismiss()
+            onDelete()
+        }
+    )
+}
+
+/**
+ * 菜单项行（图标 + 文字，44dp 高，点击带涟漪反馈）
+ */
+@Composable
+private fun MenuItemRow(
+    icon: ImageVector,
+    iconTint: Color,
+    text: String,
+    textColor: Color,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(44.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        DropdownMenuItem(
-            text = { Text("重命名") },
-            leadingIcon = { Icon(Icons.Default.Create, contentDescription = null) },
-            onClick = onRename
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(16.dp)
         )
-        DropdownMenuItem(
-            text = { Text("移动") },
-            leadingIcon = { Icon(Icons.AutoMirrored.Filled.DriveFileMove, contentDescription = null) },
-            onClick = onMove
-        )
-        DropdownMenuItem(
-            text = {
-                Text(
-                    text = "删除",
-                    color = MaterialTheme.colorScheme.error
-                )
-            },
-            leadingIcon = {
-                Icon(
-                    Icons.Default.Delete,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.error
-                )
-            },
-            onClick = onDelete
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = text,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.Medium,
+            color = textColor
         )
     }
 }

@@ -8,12 +8,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,6 +22,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import coil.compose.AsyncImage
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.ResourceType
@@ -61,9 +61,14 @@ fun FileItem(
     onRetryClick: () -> Unit = {},
     onCancelDownload: () -> Unit = {},
     onMoreClick: () -> Unit = {},
+    moreIcon: ImageVector = Icons.Default.MoreVert,
+    moreIconDescription: String = "更多操作",
+    moreIconTint: Color = TextSecondary,
+    moreMenuContent: (@Composable (onDismiss: () -> Unit) -> Unit)? = null,
     fileMissing: Boolean = false,
     modifier: Modifier = Modifier
 ) {
+    var showMenu by remember { mutableStateOf(false) }
     val icon = getResourceIcon(resource.resourceType)
     val iconColor = getResourceIconColor(resource.resourceType)
     val hasPreviews = resource.isVideo && previewImages.isNotEmpty()
@@ -163,16 +168,37 @@ fun FileItem(
                             contentDescription = "进入目录",
                             tint = TextMuted
                         )
-                        // 更多操作按钮
-                        IconButton(
-                            onClick = onMoreClick,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "更多操作",
-                                tint = TextSecondary
-                            )
+                        // 更多操作按钮（含下拉菜单，锚定到按钮处）
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    if (moreMenuContent != null) showMenu = true else onMoreClick()
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = moreIcon,
+                                    contentDescription = moreIconDescription,
+                                    tint = moreIconTint
+                                )
+                            }
+                            if (moreMenuContent != null) {
+                                Popup(
+                                    onDismissRequest = { showMenu = false },
+                                    alignment = Alignment.TopEnd,
+                                    properties = PopupProperties(focusable = true)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = Color.White,
+                                        shadowElevation = 6.dp
+                                    ) {
+                                        Column(modifier = Modifier.width(168.dp)) {
+                                            moreMenuContent { showMenu = false }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 } else {
@@ -254,16 +280,37 @@ fun FileItem(
                                     TextMuted
                             )
                         }
-                        // 更多操作按钮
-                        IconButton(
-                            onClick = onMoreClick,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.MoreVert,
-                                contentDescription = "更多操作",
-                                tint = TextSecondary
-                            )
+                        // 更多操作按钮（含下拉菜单，锚定到按钮处）
+                        Box {
+                            IconButton(
+                                onClick = {
+                                    if (moreMenuContent != null) showMenu = true else onMoreClick()
+                                },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = moreIcon,
+                                    contentDescription = moreIconDescription,
+                                    tint = moreIconTint
+                                )
+                            }
+                            if (moreMenuContent != null) {
+                                Popup(
+                                    onDismissRequest = { showMenu = false },
+                                    alignment = Alignment.TopEnd,
+                                    properties = PopupProperties(focusable = true)
+                                ) {
+                                    Surface(
+                                        shape = RoundedCornerShape(16.dp),
+                                        color = Color.White,
+                                        shadowElevation = 6.dp
+                                    ) {
+                                        Column(modifier = Modifier.width(168.dp)) {
+                                            moreMenuContent { showMenu = false }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -331,7 +378,7 @@ private fun PreviewImageItem(
 @Composable
 private fun getResourceIcon(type: ResourceType): ImageVector {
     return when (type) {
-        ResourceType.DIRECTORY -> Icons.AutoMirrored.Filled.List
+        ResourceType.DIRECTORY -> Icons.Filled.Folder
         ResourceType.VIDEO -> Icons.Default.PlayArrow
         ResourceType.IMAGE -> Icons.Default.Person
         ResourceType.AUDIO -> Icons.Default.Phone

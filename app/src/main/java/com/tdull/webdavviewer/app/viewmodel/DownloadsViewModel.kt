@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
@@ -47,8 +48,14 @@ class DownloadsViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    // 正在下载的任务
+    // 正在下载的任务（过滤掉已完成的项；完成项会进入 downloads 列表）
     val activeDownloads: StateFlow<Map<String, DownloadProgress>> = downloadManager.downloadProgress
+        .map { progressMap -> progressMap.filterValues { !it.isComplete } }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyMap()
+        )
 
     /**
      * 显示删除确认对话框

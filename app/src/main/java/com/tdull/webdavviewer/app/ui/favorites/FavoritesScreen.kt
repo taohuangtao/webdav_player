@@ -1,21 +1,38 @@
 package com.tdull.webdavviewer.app.ui.favorites
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.ui.browser.FileItem
 import com.tdull.webdavviewer.app.viewmodel.FavoritesViewModel
+
+// ================= 收藏页设计稿配色（与 filebrowser_redesign.html 统一） =================
+private val SettingsBg = Color(0xFFF4F6FB)      // 页面背景
+private val CardWhite = Color(0xFFFFFFFF)        // 卡片底色
+private val TextPrimary = Color(0xFF111827)      // 主文字
+private val TextSecondary = Color(0xFF6B7280)    // 次级文字
+private val TextMuted = Color(0xFF9CA3AF)        // 弱化文字
+private val DeleteRed = Color(0xFFF43F5E)        // 删除红
+private val DividerColor = Color(0xFFF3F4F6)     // 分割线
 
 /**
  * 收藏列表页面
@@ -37,19 +54,38 @@ fun FavoritesScreen(
     var deleteTarget by remember { mutableStateOf<FavoriteItem?>(null) }
 
     Scaffold(
+        containerColor = SettingsBg,
         topBar = {
-            TopAppBar(
-                title = { Text("我的收藏") },
-                navigationIcon = {
+            // 紧凑顶部导航栏（与文件浏览器统一）
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(SettingsBg)
+                    .statusBarsPadding()
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp)
+                        .padding(horizontal = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "返回",
+                            tint = TextPrimary
+                        )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
+                    Text(
+                        text = "我的收藏",
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
         }
     ) { paddingValues ->
         Column(
@@ -135,7 +171,7 @@ private data class PreviewState(
 )
 
 /**
- * 收藏列表
+ * 收藏列表（白卡片包裹，与文件浏览器一致）
  */
 @Composable
 private fun FavoriteList(
@@ -147,13 +183,18 @@ private fun FavoriteList(
     onDeleteRequest: (FavoriteItem) -> Unit
 ) {
     LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 0.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .wrapContentHeight()
+            .padding(horizontal = 20.dp)
+            .clip(RoundedCornerShape(22.dp))
+            .background(CardWhite),
+        contentPadding = PaddingValues(vertical = 4.dp)
     ) {
-        items(
+        itemsIndexed(
             items = favorites,
-            key = { it.id }
-        ) { favorite ->
+            key = { _, item -> item.id }
+        ) { index, favorite ->
             // 获取预览图
             val previews = videoPreviews[favorite.resourcePath] ?: emptyList()
 
@@ -161,14 +202,23 @@ private fun FavoriteList(
                 resource = favorite.toWebDAVResource(),
                 onClick = { onFavoriteClick(favorite) },
                 previewImages = previews,
-                onPreviewClick = { images, index -> onPreviewClick(images, index) },
+                onPreviewClick = { images, previewIndex -> onPreviewClick(images, previewIndex) },
                 onLoadPreviews = { onLoadPreviews(favorite.resourcePath) },
                 isFavorite = true,
                 onFavoriteClick = {},
-                onMoreClick = { onDeleteRequest(favorite) }
+                onMoreClick = { onDeleteRequest(favorite) },
+                moreIcon = Icons.Default.Delete,
+                moreIconDescription = "删除",
+                moreIconTint = DeleteRed
             )
 
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            // 行间分割线（最后一行不加）
+            if (index < favorites.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(start = 62.dp),
+                    color = DividerColor
+                )
+            }
         }
     }
 }
@@ -213,19 +263,20 @@ private fun EmptyState() {
                 imageVector = Icons.Default.Favorite,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = MaterialTheme.colorScheme.outline
+                tint = TextMuted
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = "暂无收藏",
                 style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.outline
+                color = TextSecondary
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "在视频播放器中点击收藏按钮添加",
                 style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.outline
+                color = TextMuted,
+                textAlign = TextAlign.Center
             )
         }
     }

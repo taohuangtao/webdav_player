@@ -17,7 +17,6 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -321,7 +320,7 @@ private fun EntryCard(
 }
 
 /**
- * 服务器列表项 ——设计稿风格：白底圆角卡片 + indigo 图标方块 + 名称/URL/认证标签 + "当前"胶囊 + 更多菜单
+ * 服务器列表项 ——设计稿风格：白底圆角卡片 + indigo 图标方块 + 名称 + 更多菜单
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -367,59 +366,16 @@ fun ServerItem(
 
             Spacer(modifier = Modifier.width(12.dp))
 
-            // 服务器信息
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = server.name,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(3.dp))
-                Text(
-                    text = server.url,
-                    fontSize = 12.sp,
-                    color = TextSecondary,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (server.requiresAuth()) {
-                    Spacer(modifier = Modifier.height(3.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = null,
-                            tint = TextMuted,
-                            modifier = Modifier.size(10.dp)
-                        )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "需要认证",
-                            fontSize = 11.sp,
-                            color = TextMuted
-                        )
-                    }
-                }
-            }
-
-            // 激活状态标签（胶囊）
-            if (isActive) {
-                Box(
-                    modifier = Modifier
-                        .background(IndigoLight, RoundedCornerShape(50))
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    Text(
-                        text = "当前",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = IndigoPrimary
-                    )
-                }
-                Spacer(modifier = Modifier.width(8.dp))
-            }
+            // 服务器名称
+            Text(
+                text = server.name,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
+            )
 
             // 更多操作菜单
             Box {
