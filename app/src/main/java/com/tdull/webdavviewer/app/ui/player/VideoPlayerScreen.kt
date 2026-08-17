@@ -81,16 +81,28 @@ fun VideoPlayerScreen(
     val view = LocalView.current
     val window = (context as? android.app.Activity)?.window
 
-    // 手动切换横竖屏：根据当前屏幕方向取反
+    // 记录用户通过"切换横竖屏"按钮选择的方向意图。
+    // 初始为 UNSPECIFIED（跟随系统）；旋转触发 Activity 重建后，rememberSaveable 会保留该值，供重放使用。
+    var orientationMode by rememberSaveable {
+        mutableStateOf(android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+    }
+
+    // 手动切换横竖屏：根据当前屏幕方向取反，并记录用户意图
     val toggleOrientation: () -> Unit = {
         val activity = context as? android.app.Activity
         if (activity != null) {
-            val currentOrientation = context.resources.configuration.orientation
-            activity.requestedOrientation = if (currentOrientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
-                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-            } else {
-                android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
-            }
+            val target = computeTargetOrientation(context.resources.configuration.orientation)
+            orientationMode = target
+            activity.requestedOrientation = target
+        }
+    }
+
+    // 组合建立（含旋转重建后的新组合）时，重放用户选择的方向意图，确保 requestedOrientation 与意图一致。
+    // 首帧 orientationMode 为 UNSPECIFIED 时不主动设置，避免覆盖系统默认方向。
+    LaunchedEffect(Unit) {
+        val activity = context as? android.app.Activity
+        if (activity != null && orientationMode != android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
+            activity.requestedOrientation = orientationMode
         }
     }
 
@@ -117,9 +129,12 @@ fun VideoPlayerScreen(
             // 恢复跟随系统自动旋转方向
             // toggleOrientation 会将 requestedOrientation 锁定为横/竖屏，若离开时不恢复，
             // 整个 Activity 会保持锁定，导致文件浏览等其它页面无法跟随系统横竖屏旋转。
-            // 在配置变更(isChangingConfigurations)时恢复为 UNSPECIFIED 同样安全，因为它表示"跟随系统"。
+            // 仅在真正离开播放页（isChangingConfigurations != true）时恢复为 UNSPECIFIED。
+            // 旋转切换横竖屏会触发配置变更(isChangingConfigurations == true)，此时必须跳过重置，
+            // 否则会撤销刚请求的方向，导致横屏被弹回竖屏（系统锁定竖屏时尤为明显）。
+            // 保留的方向会在新组合中由 LaunchedEffect 重放，保证切换稳定。
             val activity = context as? android.app.Activity
-            if (activity != null) {
+            if (activity != null && !activity.isChangingConfigurations) {
                 activity.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             }
         }
@@ -918,6 +933,22 @@ private fun VideoProgressSlider(
             inactiveTrackColor = Color.White.copy(alpha = 0.3f)
         )
     )
+}
+
+/**
+ * 计算点击"切换横竖屏"按钮后应设置的目标方向。
+ * 根据当前屏幕方向取反：横屏→竖屏，竖屏→横屏。
+ * 对非横竖屏取值（UNDEFINED 等）默认返回横屏，保证按钮可预期、不崩溃。
+ *
+ * @param currentOrientation 当前 [android.content.res.Configuration.orientation] 取值
+ * @return 目标 [android.content.pm.ActivityInfo.SCREEN_ORIENTATION_*] 常量
+ */
+internal fun computeTargetOrientation(currentOrientation: Int): Int {
+    return if (currentOrientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE) {
+        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+    } else {
+        android.content.pm.ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+    }
 }
 
 /**
