@@ -182,7 +182,7 @@ fun FileItem(
                                     tint = moreIconTint
                                 )
                             }
-                            if (moreMenuContent != null) {
+                            if (showMenu && moreMenuContent != null) {
                                 Popup(
                                     onDismissRequest = { showMenu = false },
                                     alignment = Alignment.TopEnd,
@@ -294,7 +294,7 @@ fun FileItem(
                                     tint = moreIconTint
                                 )
                             }
-                            if (moreMenuContent != null) {
+                            if (showMenu && moreMenuContent != null) {
                                 Popup(
                                     onDismissRequest = { showMenu = false },
                                     alignment = Alignment.TopEnd,
