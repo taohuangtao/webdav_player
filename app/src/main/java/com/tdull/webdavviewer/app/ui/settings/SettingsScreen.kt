@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.tdull.webdavviewer.app.data.model.ServerConfig
+import com.tdull.webdavviewer.app.ui.components.MenuItemRow
+import com.tdull.webdavviewer.app.ui.components.MenuPopupContainer
 import com.tdull.webdavviewer.app.viewmodel.SettingsViewModel
 
 // ================= 设置页设计稿配色（settings_redesign.html） =================
@@ -390,40 +392,41 @@ fun ServerItem(
                         modifier = Modifier.size(16.dp)
                     )
                 }
-                DropdownMenu(
+                // 更多操作菜单：使用与文件列表一致的公共菜单容器（白底圆角浮层 + 展开动效）与菜单项样式
+                MenuPopupContainer(
                     expanded = showMenu,
-                    onDismissRequest = { showMenu = false }
+                    onDismiss = { showMenu = false }
                 ) {
                     if (!isActive) {
-                        DropdownMenuItem(
-                            text = { Text("设为当前") },
+                        MenuItemRow(
+                            icon = Icons.Default.Check,
+                            iconTint = IndigoPrimary,
+                            text = "设为当前",
+                            textColor = TextPrimary,
                             onClick = {
-                                onActivate()
                                 showMenu = false
-                            },
-                            leadingIcon = { Icon(Icons.Default.Check, contentDescription = null) }
+                                onActivate()
+                            }
                         )
                     }
-                    DropdownMenuItem(
-                        text = { Text("编辑") },
+                    MenuItemRow(
+                        icon = Icons.Default.Edit,
+                        iconTint = IndigoPrimary,
+                        text = "编辑",
+                        textColor = TextPrimary,
                         onClick = {
+                            showMenu = false
                             onEdit()
-                            showMenu = false
-                        },
-                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                        }
                     )
-                    DropdownMenuItem(
-                        text = { Text("删除") },
+                    MenuItemRow(
+                        icon = Icons.Default.Delete,
+                        iconTint = RosePrimary,
+                        text = "删除",
+                        textColor = RosePrimary,
                         onClick = {
-                            onDelete()
                             showMenu = false
-                        },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.error
-                            )
+                            onDelete()
                         }
                     )
                 }

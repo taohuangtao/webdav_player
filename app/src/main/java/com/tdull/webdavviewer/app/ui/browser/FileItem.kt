@@ -22,12 +22,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupProperties
 import coil.compose.AsyncImage
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.ResourceType
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
+import com.tdull.webdavviewer.app.ui.components.MenuPopupContainer
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -183,20 +182,11 @@ fun FileItem(
                                 )
                             }
                             if (showMenu && moreMenuContent != null) {
-                                Popup(
-                                    onDismissRequest = { showMenu = false },
-                                    alignment = Alignment.TopEnd,
-                                    properties = PopupProperties(focusable = true)
+                                MenuPopupContainer(
+                                    expanded = showMenu,
+                                    onDismiss = { showMenu = false }
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = Color.White,
-                                        shadowElevation = 6.dp
-                                    ) {
-                                        Column(modifier = Modifier.width(168.dp)) {
-                                            moreMenuContent { showMenu = false }
-                                        }
-                                    }
+                                    moreMenuContent { showMenu = false }
                                 }
                             }
                         }
@@ -295,20 +285,11 @@ fun FileItem(
                                 )
                             }
                             if (showMenu && moreMenuContent != null) {
-                                Popup(
-                                    onDismissRequest = { showMenu = false },
-                                    alignment = Alignment.TopEnd,
-                                    properties = PopupProperties(focusable = true)
+                                MenuPopupContainer(
+                                    expanded = showMenu,
+                                    onDismiss = { showMenu = false }
                                 ) {
-                                    Surface(
-                                        shape = RoundedCornerShape(16.dp),
-                                        color = Color.White,
-                                        shadowElevation = 6.dp
-                                    ) {
-                                        Column(modifier = Modifier.width(168.dp)) {
-                                            moreMenuContent { showMenu = false }
-                                        }
-                                    }
+                                    moreMenuContent { showMenu = false }
                                 }
                             }
                         }

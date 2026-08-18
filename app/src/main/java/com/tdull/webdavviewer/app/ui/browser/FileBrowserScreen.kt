@@ -41,6 +41,7 @@ import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
+import com.tdull.webdavviewer.app.ui.components.MenuItemRow
 import com.tdull.webdavviewer.app.viewmodel.FileBrowserViewModel
 
 // ================= 文件浏览器设计稿配色（filebrowser_redesign.html） =================
@@ -605,41 +606,6 @@ private fun OperationMenuItems(
             onDelete()
         }
     )
-}
-
-/**
- * 菜单项行（图标 + 文字，44dp 高，点击带涟漪反馈）
- */
-@Composable
-private fun MenuItemRow(
-    icon: ImageVector,
-    iconTint: Color,
-    text: String,
-    textColor: Color,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(44.dp)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = iconTint,
-            modifier = Modifier.size(16.dp)
-        )
-        Spacer(modifier = Modifier.width(12.dp))
-        Text(
-            text = text,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = textColor
-        )
-    }
 }
 
 /**
