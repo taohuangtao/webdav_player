@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material3.*
@@ -30,6 +31,7 @@ import com.tdull.webdavviewer.app.data.model.DownloadItem
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.service.DownloadProgress
 import com.tdull.webdavviewer.app.ui.browser.FileItem
+import com.tdull.webdavviewer.app.ui.components.MenuItemRow
 import com.tdull.webdavviewer.app.viewmodel.DownloadsViewModel
 
 // ================= 下载页设计稿配色（与 filebrowser_redesign.html 统一） =================
@@ -261,12 +263,41 @@ private fun DownloadList(
                     resource = download.toWebDAVResource(),
                     onClick = { onDownloadClick(download) },
                     downloadState = DownloadState.Downloaded,
-                    onDownloadClick = { onDownloadClick(download) },
                     fileMissing = !fileExists,
-                    onMoreClick = { onDeleteClick(download) },
-                    moreIcon = Icons.Default.Delete,
-                    moreIconDescription = "删除",
-                    moreIconTint = ErrorPrimary
+                    moreMenuContent = { onDismiss ->
+                        MenuItemRow(
+                            icon = Icons.Default.PlayArrow,
+                            iconTint = TextPrimary,
+                            text = "打开",
+                            textColor = TextPrimary,
+                            onClick = {
+                                onDismiss()
+                                onDownloadClick(download)
+                            }
+                        )
+                        if (!fileExists) {
+                            MenuItemRow(
+                                icon = Icons.Default.Refresh,
+                                iconTint = IndigoPrimary,
+                                text = "重新下载",
+                                textColor = TextPrimary,
+                                onClick = {
+                                    onDismiss()
+                                    onRetryDownload(download.resourcePath)
+                                }
+                            )
+                        }
+                        MenuItemRow(
+                            icon = Icons.Default.Delete,
+                            iconTint = ErrorPrimary,
+                            text = "删除",
+                            textColor = ErrorPrimary,
+                            onClick = {
+                                onDismiss()
+                                onDeleteClick(download)
+                            }
+                        )
+                    }
                 )
                 // 行间分割线（最后一行不加）
                 if (index < downloads.lastIndex) {

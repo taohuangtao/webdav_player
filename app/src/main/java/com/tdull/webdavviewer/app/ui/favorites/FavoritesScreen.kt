@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,6 +24,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.ui.browser.FileItem
+import com.tdull.webdavviewer.app.ui.components.MenuItemRow
 import com.tdull.webdavviewer.app.viewmodel.FavoritesViewModel
 
 // ================= 收藏页设计稿配色（与 filebrowser_redesign.html 统一） =================
@@ -204,12 +206,28 @@ private fun FavoriteList(
                 previewImages = previews,
                 onPreviewClick = { images, previewIndex -> onPreviewClick(images, previewIndex) },
                 onLoadPreviews = { onLoadPreviews(favorite.resourcePath) },
-                isFavorite = true,
-                onFavoriteClick = {},
-                onMoreClick = { onDeleteRequest(favorite) },
-                moreIcon = Icons.Default.Delete,
-                moreIconDescription = "删除",
-                moreIconTint = DeleteRed
+                moreMenuContent = { onDismiss ->
+                    MenuItemRow(
+                        icon = Icons.Default.PlayArrow,
+                        iconTint = TextPrimary,
+                        text = "打开",
+                        textColor = TextPrimary,
+                        onClick = {
+                            onDismiss()
+                            onFavoriteClick(favorite)
+                        }
+                    )
+                    MenuItemRow(
+                        icon = Icons.Default.Delete,
+                        iconTint = DeleteRed,
+                        text = "删除收藏",
+                        textColor = DeleteRed,
+                        onClick = {
+                            onDismiss()
+                            onDeleteRequest(favorite)
+                        }
+                    )
+                }
             )
 
             // 行间分割线（最后一行不加）

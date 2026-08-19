@@ -16,10 +16,14 @@ import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -373,15 +377,18 @@ private fun FileList(
                 previewImages = previews,
                 onPreviewClick = onPreviewClick,
                 onLoadPreviews = { onLoadPreviews(resource.path) },
-                isFavorite = favoriteStates[resource.path] ?: false,
-                onFavoriteClick = { onToggleFavorite(resource) },
                 downloadState = downloadStates[resource.path] ?: DownloadState.NotDownloaded,
-                onDownloadClick = { onDownloadClick(resource) },
-                onRetryClick = { onRetryDownload(resource) },
                 onCancelDownload = { onCancelDownload(resource) },
                 moreMenuContent = { onDismiss ->
-                    OperationMenuItems(
+                    FileMenuItems(
+                        resource = resource,
+                        downloadState = downloadStates[resource.path] ?: DownloadState.NotDownloaded,
+                        isFavorite = favoriteStates[resource.path] ?: false,
                         onDismiss = onDismiss,
+                        onEnter = { onFileClick(resource) },
+                        onDownload = { onDownloadClick(resource) },
+                        onRetryDownload = { onRetryDownload(resource) },
+                        onToggleFavorite = { onToggleFavorite(resource) },
                         onRename = { onRename(resource) },
                         onMove = { onMove(resource) },
                         onDelete = { onDelete(resource) }
@@ -605,6 +612,73 @@ private fun OperationMenuItems(
             onDismiss()
             onDelete()
         }
+    )
+}
+
+/**
+ * 文件/目录的"更多操作"菜单项（在 FileItem 的 Popup 菜单容器内渲染）
+ * 文件菜单：下载(仅视频,状态相关) / 收藏或取消收藏 / 重命名 / 移动 / 删除
+ * 目录菜单：重命名 / 移动 / 删除（进入通过点击 item 本身实现）
+ * 下载动作仅在非下载中状态显示（下载中由行内进度指示承担）
+ */
+@Composable
+private fun FileMenuItems(
+    resource: WebDAVResource,
+    downloadState: DownloadState,
+    isFavorite: Boolean,
+    onDismiss: () -> Unit,
+    onEnter: () -> Unit,
+    onDownload: () -> Unit,
+    onRetryDownload: () -> Unit,
+    onToggleFavorite: () -> Unit,
+    onRename: () -> Unit,
+    onMove: () -> Unit,
+    onDelete: () -> Unit
+) {
+    if (!resource.isDirectory) {
+        // 文件菜单：下载(仅视频,非下载中) / 收藏或取消收藏
+        if (resource.isVideo && downloadState !is DownloadState.Downloading) {
+            MenuItemRow(
+                icon = when (downloadState) {
+                    is DownloadState.Downloaded -> Icons.Default.Check
+                    is DownloadState.Error -> Icons.Default.Refresh
+                    else -> Icons.Default.Download
+                },
+                iconTint = if (downloadState is DownloadState.Error) DeleteRed else IndigoPrimary,
+                text = when (downloadState) {
+                    is DownloadState.NotDownloaded -> "下载"
+                    is DownloadState.Downloading -> ""
+                    is DownloadState.Downloaded -> "打开"
+                    is DownloadState.Error -> "重试"
+                },
+                textColor = if (downloadState is DownloadState.Error) DeleteRed else TextPrimary,
+                onClick = {
+                    onDismiss()
+                    when (downloadState) {
+                        is DownloadState.Downloaded -> onEnter()          // 已下载 → 打开播放
+                        is DownloadState.Error -> onRetryDownload()       // 失败 → 重试下载
+                        else -> onDownload()                              // 未下载 → 下载
+                    }
+                }
+            )
+        }
+        MenuItemRow(
+            icon = if (isFavorite) Icons.Default.Star else Icons.Outlined.Star,
+            iconTint = if (isFavorite) IndigoPrimary else TextSecondary,
+            text = if (isFavorite) "取消收藏" else "收藏",
+            textColor = TextPrimary,
+            onClick = {
+                onDismiss()
+                onToggleFavorite()
+            }
+        )
+    }
+    // 重命名 / 移动 / 删除（文件与目录通用）
+    OperationMenuItems(
+        onDismiss = onDismiss,
+        onRename = onRename,
+        onMove = onMove,
+        onDelete = onDelete
     )
 }
 

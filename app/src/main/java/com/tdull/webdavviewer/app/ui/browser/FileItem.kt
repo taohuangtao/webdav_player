@@ -9,7 +9,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,16 +52,8 @@ fun FileItem(
     previewImages: List<String> = emptyList(),
     onPreviewClick: (List<String>, Int) -> Unit = { _, _ -> },
     onLoadPreviews: () -> Unit = {},
-    isFavorite: Boolean = false,
-    onFavoriteClick: () -> Unit = {},
     downloadState: DownloadState = DownloadState.NotDownloaded,
-    onDownloadClick: () -> Unit = {},
-    onRetryClick: () -> Unit = {},
     onCancelDownload: () -> Unit = {},
-    onMoreClick: () -> Unit = {},
-    moreIcon: ImageVector = Icons.Default.MoreVert,
-    moreIconDescription: String = "更多操作",
-    moreIconTint: Color = TextSecondary,
     moreMenuContent: (@Composable (onDismiss: () -> Unit) -> Unit)? = null,
     fileMissing: Boolean = false,
     modifier: Modifier = Modifier
@@ -157,28 +148,21 @@ fun FileItem(
                     }
                 }
                 
-                // 目录箭头
+                // 目录：仅显示更多操作按钮（点击 item 本身即进入）
                 if (resource.isDirectory) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = "进入目录",
-                            tint = TextMuted
-                        )
                         // 更多操作按钮（含下拉菜单，锚定到按钮处）
                         Box {
                             IconButton(
-                                onClick = {
-                                    if (moreMenuContent != null) showMenu = true else onMoreClick()
-                                },
+                                onClick = { showMenu = true },
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    imageVector = moreIcon,
-                                    contentDescription = moreIconDescription,
-                                    tint = moreIconTint
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "更多操作",
+                                    tint = TextSecondary
                                 )
                             }
                             if (showMenu && moreMenuContent != null) {
@@ -195,93 +179,37 @@ fun FileItem(
                     Row(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // 下载按钮（仅视频文件显示）
-                        if (resource.isVideo) {
-                            when (downloadState) {
-                                is DownloadState.NotDownloaded -> {
-                                    IconButton(
-                                        onClick = onDownloadClick,
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Download,
-                                            contentDescription = "下载",
-                                            tint = TextSecondary
-                                        )
-                                    }
-                                }
-                                is DownloadState.Downloading -> {
-                                    Box(
-                                        contentAlignment = Alignment.Center,
-                                        modifier = Modifier
-                                            .size(32.dp)
-                                            .clickable(onClick = onCancelDownload)
-                                    ) {
-                                        CircularProgressIndicator(
-                                            progress = { downloadState.progressPercent / 100f },
-                                            modifier = Modifier.size(28.dp),
-                                            strokeWidth = 2.5.dp,
-                                            color = IndigoPrimary
-                                        )
-                                        Text(
-                                            text = "${downloadState.progressPercent}%",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = IndigoPrimary
-                                        )
-                                    }
-                                }
-                                is DownloadState.Downloaded -> {
-                                    IconButton(
-                                        onClick = onDownloadClick,
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Check,
-                                            contentDescription = "已下载",
-                                            tint = IndigoPrimary
-                                        )
-                                    }
-                                }
-                                is DownloadState.Error -> {
-                                    IconButton(
-                                        onClick = onRetryClick,
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Refresh,
-                                            contentDescription = "重试下载",
-                                            tint = MaterialTheme.colorScheme.error
-                                        )
-                                    }
-                                }
+                        // 下载中进度指示（仅下载中显示，点击取消）
+                        if (resource.isVideo && downloadState is DownloadState.Downloading) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clickable(onClick = onCancelDownload)
+                            ) {
+                                CircularProgressIndicator(
+                                    progress = { downloadState.progressPercent / 100f },
+                                    modifier = Modifier.size(28.dp),
+                                    strokeWidth = 2.5.dp,
+                                    color = IndigoPrimary
+                                )
+                                Text(
+                                    text = "${downloadState.progressPercent}%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = IndigoPrimary
+                                )
                             }
-                        }
-                        // 收藏按钮
-                        IconButton(
-                            onClick = onFavoriteClick,
-                            modifier = Modifier.size(32.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isFavorite) Icons.Default.Star else Icons.Outlined.Star,
-                                contentDescription = if (isFavorite) "取消收藏" else "收藏",
-                                tint = if (isFavorite)
-                                    IndigoPrimary
-                                else
-                                    TextMuted
-                            )
                         }
                         // 更多操作按钮（含下拉菜单，锚定到按钮处）
                         Box {
                             IconButton(
-                                onClick = {
-                                    if (moreMenuContent != null) showMenu = true else onMoreClick()
-                                },
+                                onClick = { showMenu = true },
                                 modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
-                                    imageVector = moreIcon,
-                                    contentDescription = moreIconDescription,
-                                    tint = moreIconTint
+                                    imageVector = Icons.Default.MoreVert,
+                                    contentDescription = "更多操作",
+                                    tint = TextSecondary
                                 )
                             }
                             if (showMenu && moreMenuContent != null) {

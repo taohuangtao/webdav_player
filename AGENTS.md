@@ -121,6 +121,9 @@ data class WebDAVResource(
 
 ## 开发指南
 
+说明：  
+- 用户没有指明的情况下，不用跑全量 androidTest。
+
 ### 基本开发流程
 
 - 修改代码后需要编译命令 `./gradlew assembleDebug`，然后解决编译错误和编译警告。

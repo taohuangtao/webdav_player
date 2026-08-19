@@ -9,6 +9,7 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.ResourceType
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.ui.theme.WebDAVViewerTheme
@@ -95,5 +96,46 @@ class FileItemTest {
         composeTestRule.onNodeWithText("MENU_ITEM").performClick()
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("MENU_ITEM").assertDoesNotExist()
+    }
+
+    @Test
+    fun noInlineFavoriteButton_whenNotFavorite() {
+        // 回归：行内不再有收藏按钮（收藏操作收拢到更多菜单）
+        setFileItemContent(testFile)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithContentDescription("收藏").assertDoesNotExist()
+    }
+
+    @Test
+    fun noInlineDownloadButton_whenNotDownloaded() {
+        // 回归：行内不再有下载按钮（下载操作收拢到更多菜单）
+        setFileItemContent(testFile)
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithContentDescription("下载").assertDoesNotExist()
+    }
+
+    @Test
+    fun downloadProgress_shownWhenDownloading() {
+        // 下载中时行内显示进度指示（点击可取消）
+        var cancelled = false
+        composeTestRule.setContent {
+            WebDAVViewerTheme {
+                FileItem(
+                    resource = testFile,
+                    onClick = {},
+                    downloadState = DownloadState.Downloading(progressPercent = 45),
+                    onCancelDownload = { cancelled = true },
+                    moreMenuContent = { onDismiss ->
+                        Text(
+                            text = "MENU_ITEM",
+                            modifier = Modifier.clickable { onDismiss() }
+                        )
+                    }
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+        // 进度百分比文本显示
+        composeTestRule.onNodeWithText("45%").assertIsDisplayed()
     }
 }
