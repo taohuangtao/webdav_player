@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.util.UUID
 import javax.inject.Inject
 
 /**
@@ -193,6 +194,41 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update { it.copy(isLoading = false) }
             }
         }
+    }
+
+    /**
+     * 复制服务器配置
+     */
+    fun copyServer(server: ServerConfig) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null, errorInfo = null) }
+            try {
+                val copiedServer = server.copy(
+                    id = UUID.randomUUID().toString(),
+                    name = generateCopyName(server.name)
+                )
+                configRepository.addServer(copiedServer)
+            } catch (e: Exception) {
+                val errorInfo = ErrorHandler.getErrorInfo(e, application)
+                _uiState.update { it.copy(error = errorInfo.message, errorInfo = errorInfo) }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
+            }
+        }
+    }
+
+    private fun generateCopyName(originalName: String): String {
+        val existingNames = _uiState.value.servers.map { it.name }.toSet()
+        val baseName = "$originalName 副本"
+        if (baseName !in existingNames) {
+            return baseName
+        }
+
+        var index = 2
+        while ("$baseName $index" in existingNames) {
+            index++
+        }
+        return "$baseName $index"
     }
 
     /**

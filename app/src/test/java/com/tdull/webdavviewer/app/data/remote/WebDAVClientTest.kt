@@ -349,17 +349,86 @@ class WebDAVClientTest {
 
     // ========== getStreamUrl 测试 ==========
 
-    @Test
-    fun `getStreamUrl returns correct URL`() {
+    private fun setupClientForUrlGeneration(basePath: String = "/webdav/") {
+        mockWebServer.enqueue(
+            MockResponse()
+                .setResponseCode(207)
+                .setBody("<?xml version=\"1.0\"?><D:multistatus xmlns:D=\"DAV:\"></D:multistatus>")
+        )
         val config = ServerConfig(
             name = "Test",
-            url = "https://example.com/webdav"
+            url = mockWebServer.url(basePath).toString().trimEnd('/')
         )
 
         client.connect(config)
+    }
+
+    @Test
+    fun `getStreamUrl returns correct URL`() {
+        setupClientForUrlGeneration()
         val streamUrl = client.getStreamUrl("/video.mp4")
 
-        assertEquals("https://example.com/webdav/video.mp4", streamUrl)
+        assertEquals(mockWebServer.url("/webdav/video.mp4").toString(), streamUrl)
+    }
+
+    @Test
+    fun `getImageThumbnailUrl returns root thumbnail URL`() {
+        setupClientForUrlGeneration()
+
+        val thumbnailUrl = client.getImageThumbnailUrl("/photo.png")
+
+        assertEquals(mockWebServer.url("/webdav/.thumbs/photo.png.jpg").toString(), thumbnailUrl)
+    }
+
+    @Test
+    fun `getImageThumbnailUrl returns nested thumbnail URL`() {
+        setupClientForUrlGeneration()
+
+        val thumbnailUrl = client.getImageThumbnailUrl("/photos/album/photo.png")
+
+        assertEquals(mockWebServer.url("/webdav/photos/album/.thumbs/photo.png.jpg").toString(), thumbnailUrl)
+    }
+
+    @Test
+    fun `getImageThumbnailUrl encodes spaces and special characters`() {
+        setupClientForUrlGeneration()
+
+        val thumbnailUrl = client.getImageThumbnailUrl("/photos/vacation photo#1.png")
+
+        assertEquals(
+            mockWebServer.url("/webdav/photos/.thumbs/vacation%20photo%231.png.jpg").toString(),
+            thumbnailUrl
+        )
+    }
+
+    @Test
+    fun `getImageMediumThumbnailUrl returns root medium thumbnail URL`() {
+        setupClientForUrlGeneration()
+
+        val thumbnailUrl = client.getImageMediumThumbnailUrl("/photo.png")
+
+        assertEquals(mockWebServer.url("/webdav/.thumbs/photo.png.m.jpg").toString(), thumbnailUrl)
+    }
+
+    @Test
+    fun `getImageMediumThumbnailUrl returns nested medium thumbnail URL`() {
+        setupClientForUrlGeneration()
+
+        val thumbnailUrl = client.getImageMediumThumbnailUrl("/photos/album/photo.png")
+
+        assertEquals(mockWebServer.url("/webdav/photos/album/.thumbs/photo.png.m.jpg").toString(), thumbnailUrl)
+    }
+
+    @Test
+    fun `getImageMediumThumbnailUrl encodes spaces and special characters`() {
+        setupClientForUrlGeneration()
+
+        val thumbnailUrl = client.getImageMediumThumbnailUrl("/photos/vacation photo#1.png")
+
+        assertEquals(
+            mockWebServer.url("/webdav/photos/.thumbs/vacation%20photo%231.png.m.jpg").toString(),
+            thumbnailUrl
+        )
     }
 
     @Test(expected = IllegalStateException::class)
@@ -564,6 +633,67 @@ class WebDAVClientTest {
 
         val exception = assertThrows(WebDAVException.AuthenticationFailed::class.java) {
             client.deleteResource("/folder/aaa.mp4")
+        }
+        assertNotNull(exception)
+    }
+
+    @Test
+    fun `createDirectory sends MKCOL request for root child with trailing slash`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(201))
+
+        client.createDirectory("/", "NewFolder")
+
+        val probeRequest = mockWebServer.takeRequest()
+        assertEquals("PROPFIND", probeRequest.method)
+        val recordedRequest = mockWebServer.takeRequest()
+        assertEquals("MKCOL", recordedRequest.method)
+        assertEquals("/webdav/NewFolder/", recordedRequest.path)
+    }
+
+    @Test
+    fun `createDirectory sends MKCOL request with encoded unicode and spaces`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(201))
+
+        client.createDirectory("/folder", "新 文件夹")
+
+        val probeRequest = mockWebServer.takeRequest()
+        assertEquals("PROPFIND", probeRequest.method)
+        val recordedRequest = mockWebServer.takeRequest()
+        assertEquals("MKCOL", recordedRequest.method)
+        assertEquals("/webdav/folder/%E6%96%B0%20%E6%96%87%E4%BB%B6%E5%A4%B9/", recordedRequest.path)
+    }
+
+    @Test
+    fun `createDirectory throws AuthenticationFailed for 401`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(401))
+
+        val exception = assertThrows(WebDAVException.AuthenticationFailed::class.java) {
+            client.createDirectory("/", "NewFolder")
+        }
+        assertNotNull(exception)
+    }
+
+    @Test
+    fun `createDirectory throws OperationFailed for 405`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(405))
+
+        val exception = assertThrows(WebDAVException.OperationFailed::class.java) {
+            client.createDirectory("/", "NewFolder")
+        }
+        assertNotNull(exception)
+    }
+
+    @Test
+    fun `createDirectory throws OperationFailed for 409`() = runTest {
+        setupPropfindClient()
+        mockWebServer.enqueue(MockResponse().setResponseCode(409))
+
+        val exception = assertThrows(WebDAVException.OperationFailed::class.java) {
+            client.createDirectory("/", "NewFolder")
         }
         assertNotNull(exception)
     }

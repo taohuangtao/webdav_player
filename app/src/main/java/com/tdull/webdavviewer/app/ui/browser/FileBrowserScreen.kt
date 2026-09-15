@@ -2,10 +2,14 @@ package com.tdull.webdavviewer.app.ui.browser
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -13,14 +17,22 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.Star
@@ -32,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
@@ -43,9 +56,14 @@ import android.util.Log
 import android.widget.Toast
 import android.content.Context
 import androidx.compose.ui.platform.LocalContext
+import coil.compose.AsyncImage
+import com.tdull.webdavviewer.app.data.model.BrowserLayoutMode
 import com.tdull.webdavviewer.app.data.model.DownloadState
+import com.tdull.webdavviewer.app.data.model.ResourceType
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.ui.components.MenuItemRow
+import com.tdull.webdavviewer.app.ui.components.MenuPopupContainer
+import com.tdull.webdavviewer.app.ui.viewer.ImageViewerItem
 import com.tdull.webdavviewer.app.viewmodel.FileBrowserViewModel
 
 // ================= 文件浏览器设计稿配色（filebrowser_redesign.html） =================
@@ -69,7 +87,7 @@ fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
     serverId: String? = null,
     onVideoClick: (String) -> Unit = {},
-    onImageClick: (String) -> Unit = {},
+    onImageClick: (List<ImageViewerItem>, Int) -> Unit = { _, _ -> },
     onNavigateBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -88,6 +106,8 @@ fun FileBrowserScreen(
     var moveTarget by remember { mutableStateOf<WebDAVResource?>(null) }
     // 删除确认对话框
     var deleteTarget by remember { mutableStateOf<WebDAVResource?>(null) }
+    // 新建文件夹对话框
+    var showCreateDirectoryDialog by remember { mutableStateOf(false) }
     
     // 操作成功/失败提示
     LaunchedEffect(uiState.operationSuccess) {
@@ -145,8 +165,42 @@ fun FileBrowserScreen(
                         fontSize = 19.sp,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
+                    LayoutModeButton(
+                        layoutMode = uiState.layoutMode,
+                        onClick = { viewModel.toggleLayoutMode() }
+                    )
+                    if (uiState.layoutMode == BrowserLayoutMode.GRID) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        GridColumnsControl(
+                            columns = uiState.gridColumns,
+                            onDecrease = { viewModel.decreaseGridColumns() },
+                            onIncrease = { viewModel.increaseGridColumns() }
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    // 新建文件夹按钮（indigo 浅底圆角方块）
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(IndigoLight, RoundedCornerShape(18.dp))
+                            .clickable(
+                                enabled = uiState.isConnected && !uiState.isOperationLoading,
+                                onClick = { showCreateDirectoryDialog = true }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CreateNewFolder,
+                            contentDescription = "新建文件夹",
+                            tint = if (uiState.isConnected) IndigoPrimary else TextMuted,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
                     // 显示/隐藏文件切换按钮（indigo 浅底圆角方块）
                     Box(
                         modifier = Modifier
@@ -226,12 +280,15 @@ fun FileBrowserScreen(
                     // 文件列表
                     FileList(
                         files = uiState.files,
+                        layoutMode = uiState.layoutMode,
+                        gridColumns = uiState.gridColumns,
                         videoPreviews = videoPreviews,
                         favoriteStates = favoriteStates,
                         downloadStates = downloadStates,
                         onFileClick = { resource ->
                             handleFileClick(
                                 resource = resource,
+                                files = uiState.files,
                                 viewModel = viewModel,
                                 onVideoClick = onVideoClick,
                                 onImageClick = onImageClick
@@ -242,6 +299,9 @@ fun FileBrowserScreen(
                         },
                         onLoadPreviews = { path ->
                             viewModel.loadVideoPreviews(path)
+                        },
+                        getImageThumbnailUrl = { path ->
+                            viewModel.getImageThumbnailUrl(path)
                         },
                         onToggleFavorite = { resource ->
                             viewModel.toggleFavorite(resource)
@@ -291,6 +351,18 @@ fun FileBrowserScreen(
             }
         )
     }
+
+    if (showCreateDirectoryDialog) {
+        CreateDirectoryDialog(
+            currentPath = currentPath,
+            isLoading = uiState.isOperationLoading,
+            onDismiss = { showCreateDirectoryDialog = false },
+            onConfirm = { folderName ->
+                viewModel.createDirectory(folderName)
+                showCreateDirectoryDialog = false
+            }
+        )
+    }
     
     // 移动对话框
     moveTarget?.let { resource ->
@@ -337,12 +409,15 @@ private data class PreviewState(
 @Composable
 private fun FileList(
     files: List<WebDAVResource>,
+    layoutMode: BrowserLayoutMode,
+    gridColumns: Int,
     videoPreviews: Map<String, List<String>>,
     favoriteStates: Map<String, Boolean>,
     downloadStates: Map<String, DownloadState>,
     onFileClick: (WebDAVResource) -> Unit,
     onPreviewClick: (List<String>, Int) -> Unit,
     onLoadPreviews: (String) -> Unit,
+    getImageThumbnailUrl: (String) -> String,
     onToggleFavorite: (WebDAVResource) -> Unit,
     onDownloadClick: (WebDAVResource) -> Unit,
     onRetryDownload: (WebDAVResource) -> Unit,
@@ -351,58 +426,356 @@ private fun FileList(
     onMove: (WebDAVResource) -> Unit,
     onDelete: (WebDAVResource) -> Unit
 ) {
-    LazyColumn(
-        modifier = Modifier
-            .fillMaxWidth()
-            .wrapContentHeight()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(22.dp))
-            .background(CardWhite),
-        contentPadding = PaddingValues(vertical = 4.dp)
-    ) {
-        itemsIndexed(
-            items = files,
-            key = { _, item -> item.path }
-        ) { index, resource ->
-            // 加载视频预览图
-            val previews = if (resource.isVideo) {
-                videoPreviews[resource.path] ?: emptyList()
-            } else {
-                emptyList()
-            }
-            
-            FileItem(
-                resource = resource,
-                onClick = { onFileClick(resource) },
-                previewImages = previews,
-                onPreviewClick = onPreviewClick,
-                onLoadPreviews = { onLoadPreviews(resource.path) },
-                downloadState = downloadStates[resource.path] ?: DownloadState.NotDownloaded,
-                onCancelDownload = { onCancelDownload(resource) },
-                moreMenuContent = { onDismiss ->
-                    FileMenuItems(
-                        resource = resource,
-                        downloadState = downloadStates[resource.path] ?: DownloadState.NotDownloaded,
-                        isFavorite = favoriteStates[resource.path] ?: false,
-                        onDismiss = onDismiss,
-                        onEnter = { onFileClick(resource) },
-                        onDownload = { onDownloadClick(resource) },
-                        onRetryDownload = { onRetryDownload(resource) },
-                        onToggleFavorite = { onToggleFavorite(resource) },
-                        onRename = { onRename(resource) },
-                        onMove = { onMove(resource) },
-                        onDelete = { onDelete(resource) }
-                    )
-                }
-            )
-            // 行间分割线（最后一行不加，增强视觉分隔）
-            if (index < files.lastIndex) {
-                HorizontalDivider(
-                    modifier = Modifier.padding(start = 62.dp),
-                    color = DividerColor
+    if (layoutMode == BrowserLayoutMode.GRID) {
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(gridColumns),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 2.dp),
+            contentPadding = PaddingValues(2.dp),
+            horizontalArrangement = Arrangement.spacedBy(2.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
+        ) {
+            items(
+                count = files.size,
+                key = { index -> files[index].path }
+            ) { index ->
+                val resource = files[index]
+                GridFileItem(
+                    resource = resource,
+                    thumbnailUrl = if (resource.isImage) {
+                        getImageThumbnailUrl(resource.path)
+                    } else {
+                        null
+                    },
+                    onClick = { onFileClick(resource) },
+                    moreMenuContent = { onDismiss ->
+                        FileMenuItems(
+                            resource = resource,
+                            downloadState = downloadStates[resource.path] ?: DownloadState.NotDownloaded,
+                            isFavorite = favoriteStates[resource.path] ?: false,
+                            onDismiss = onDismiss,
+                            onEnter = { onFileClick(resource) },
+                            onDownload = { onDownloadClick(resource) },
+                            onRetryDownload = { onRetryDownload(resource) },
+                            onToggleFavorite = { onToggleFavorite(resource) },
+                            onRename = { onRename(resource) },
+                            onMove = { onMove(resource) },
+                            onDelete = { onDelete(resource) }
+                        )
+                    }
                 )
             }
         }
+    } else {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .wrapContentHeight()
+                .padding(horizontal = 20.dp)
+                .clip(RoundedCornerShape(22.dp))
+                .background(CardWhite),
+            contentPadding = PaddingValues(vertical = 4.dp)
+        ) {
+            itemsIndexed(
+                items = files,
+                key = { _, item -> item.path }
+            ) { index, resource ->
+                // 加载视频预览图
+                val previews = if (resource.isVideo) {
+                    videoPreviews[resource.path] ?: emptyList()
+                } else {
+                    emptyList()
+                }
+
+                FileItem(
+                    resource = resource,
+                    onClick = { onFileClick(resource) },
+                    thumbnailUrl = if (resource.isImage) {
+                        getImageThumbnailUrl(resource.path)
+                    } else {
+                        null
+                    },
+                    previewImages = previews,
+                    onPreviewClick = onPreviewClick,
+                    onLoadPreviews = { onLoadPreviews(resource.path) },
+                    downloadState = downloadStates[resource.path] ?: DownloadState.NotDownloaded,
+                    onCancelDownload = { onCancelDownload(resource) },
+                    moreMenuContent = { onDismiss ->
+                        FileMenuItems(
+                            resource = resource,
+                            downloadState = downloadStates[resource.path] ?: DownloadState.NotDownloaded,
+                            isFavorite = favoriteStates[resource.path] ?: false,
+                            onDismiss = onDismiss,
+                            onEnter = { onFileClick(resource) },
+                            onDownload = { onDownloadClick(resource) },
+                            onRetryDownload = { onRetryDownload(resource) },
+                            onToggleFavorite = { onToggleFavorite(resource) },
+                            onRename = { onRename(resource) },
+                            onMove = { onMove(resource) },
+                            onDelete = { onDelete(resource) }
+                        )
+                    }
+                )
+                // 行间分割线（最后一行不加，增强视觉分隔）
+                if (index < files.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(start = 62.dp),
+                        color = DividerColor
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LayoutModeButton(
+    layoutMode: BrowserLayoutMode,
+    onClick: () -> Unit
+) {
+    val isGridMode = layoutMode == BrowserLayoutMode.GRID
+    Box(
+        modifier = Modifier
+            .size(36.dp)
+            .background(IndigoLight, RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = if (isGridMode) Icons.AutoMirrored.Filled.List else Icons.Default.Apps,
+            contentDescription = if (isGridMode) "切换为列表模式" else "切换为网格模式",
+            tint = IndigoPrimary,
+            modifier = Modifier.size(18.dp)
+        )
+    }
+}
+
+@Composable
+private fun GridColumnsControl(
+    columns: Int,
+    onDecrease: () -> Unit,
+    onIncrease: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .height(36.dp)
+            .background(IndigoLight, RoundedCornerShape(18.dp))
+            .padding(horizontal = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        GridColumnButton(
+            icon = Icons.Default.Remove,
+            contentDescription = "减少列数",
+            enabled = columns > 2,
+            onClick = onDecrease
+        )
+        Text(
+            text = columns.toString(),
+            fontSize = 13.sp,
+            fontWeight = FontWeight.SemiBold,
+            color = IndigoPrimary,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.width(18.dp)
+        )
+        GridColumnButton(
+            icon = Icons.Default.Add,
+            contentDescription = "增加列数",
+            enabled = columns < 8,
+            onClick = onIncrease
+        )
+    }
+}
+
+@Composable
+private fun GridColumnButton(
+    icon: ImageVector,
+    contentDescription: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .size(28.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = if (enabled) IndigoPrimary else TextMuted,
+            modifier = Modifier.size(16.dp)
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun GridFileItem(
+    resource: WebDAVResource,
+    thumbnailUrl: String?,
+    onClick: () -> Unit,
+    moreMenuContent: (@Composable (onDismiss: () -> Unit) -> Unit)? = null,
+    modifier: Modifier = Modifier
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    Box(
+        modifier = modifier
+            .aspectRatio(1f)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = {
+                    if (moreMenuContent != null) {
+                        showMenu = true
+                    }
+                }
+            ),
+        contentAlignment = Alignment.Center
+    ) {
+        GridResourceVisual(
+            resource = resource,
+            thumbnailUrl = thumbnailUrl,
+            modifier = Modifier.matchParentSize()
+        )
+
+        if (showMenu && moreMenuContent != null) {
+            MenuPopupContainer(
+                expanded = showMenu,
+                onDismiss = { showMenu = false }
+            ) {
+                moreMenuContent { showMenu = false }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GridResourceVisual(
+    resource: WebDAVResource,
+    thumbnailUrl: String?,
+    modifier: Modifier = Modifier
+) {
+    val icon = getGridResourceIcon(resource.resourceType)
+    val iconColor = getGridResourceIconColor(resource.resourceType)
+    val iconBg = getGridResourceIconBg(resource.resourceType)
+
+    if (resource.isImage && thumbnailUrl != null) {
+        var thumbnailLoaded by remember(thumbnailUrl) { mutableStateOf(false) }
+
+        Box(
+            modifier = modifier.background(iconBg),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!thumbnailLoaded) {
+                GridDefaultIcon(
+                    resourceName = resource.name,
+                    icon = icon,
+                    contentDescription = getGridResourceTypeName(resource.resourceType),
+                    tint = iconColor
+                )
+            }
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = "图片缩略图",
+                modifier = Modifier.matchParentSize(),
+                contentScale = ContentScale.Crop,
+                onLoading = { thumbnailLoaded = false },
+                onSuccess = { thumbnailLoaded = true },
+                onError = { thumbnailLoaded = false }
+            )
+        }
+    } else {
+        Box(
+            modifier = modifier.background(iconBg),
+            contentAlignment = Alignment.Center
+        ) {
+            GridDefaultIcon(
+                resourceName = resource.name,
+                icon = icon,
+                contentDescription = getGridResourceTypeName(resource.resourceType),
+                tint = iconColor
+            )
+        }
+    }
+}
+
+@Composable
+private fun GridDefaultIcon(
+    resourceName: String,
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(4.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = tint,
+            modifier = Modifier
+                .fillMaxSize(0.34f)
+                .align(Alignment.Center)
+                .offset(y = (-9).dp)
+        )
+        Text(
+            text = resourceName,
+            fontSize = 10.sp,
+            lineHeight = 12.sp,
+            fontWeight = FontWeight.Medium,
+            color = TextPrimary,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .fillMaxWidth()
+                .align(Alignment.BottomCenter)
+        )
+    }
+}
+
+private fun getGridResourceIcon(type: ResourceType): ImageVector {
+    return when (type) {
+        ResourceType.DIRECTORY -> Icons.Default.Folder
+        ResourceType.VIDEO -> Icons.Default.PlayArrow
+        ResourceType.IMAGE -> Icons.Default.Image
+        ResourceType.AUDIO -> Icons.Default.Phone
+        ResourceType.OTHER -> Icons.Default.Info
+    }
+}
+
+private fun getGridResourceIconColor(type: ResourceType): Color {
+    return when (type) {
+        ResourceType.DIRECTORY -> IndigoPrimary
+        ResourceType.VIDEO -> DeleteRed
+        ResourceType.IMAGE -> Color(0xFF0EA5E9)
+        ResourceType.AUDIO -> IndigoPrimary
+        ResourceType.OTHER -> Color(0xFFF59E0B)
+    }
+}
+
+private fun getGridResourceIconBg(type: ResourceType): Color {
+    return when (type) {
+        ResourceType.DIRECTORY -> IndigoLight
+        ResourceType.VIDEO -> Color(0xFFFFF1F2)
+        ResourceType.IMAGE -> Color(0xFFF0F9FF)
+        ResourceType.AUDIO -> IndigoLight
+        ResourceType.OTHER -> Color(0xFFFFFBEB)
+    }
+}
+
+private fun getGridResourceTypeName(type: ResourceType): String {
+    return when (type) {
+        ResourceType.DIRECTORY -> "文件夹"
+        ResourceType.VIDEO -> "视频"
+        ResourceType.IMAGE -> "图片"
+        ResourceType.AUDIO -> "音频"
+        ResourceType.OTHER -> "文件"
     }
 }
 
@@ -542,9 +915,10 @@ private fun EmptyDirectoryState() {
  */
 private fun handleFileClick(
     resource: WebDAVResource,
+    files: List<WebDAVResource>,
     viewModel: FileBrowserViewModel,
     onVideoClick: (String) -> Unit,
-    onImageClick: (String) -> Unit
+    onImageClick: (List<ImageViewerItem>, Int) -> Unit
 ) {
     // 日志打印资源URL
     Log.d("FileBrowserScreen", "File clicked: ${resource.path}")
@@ -562,9 +936,32 @@ private fun handleFileClick(
         }
         resource.isImage -> {
             // 查看图片
-            val streamUrl = viewModel.getStreamUrl(resource.path)
+            val imageResources = files.filter { it.isImage }
+            val imageItems = imageResources.map { imageResource ->
+                ImageViewerItem(
+                    url = viewModel.getStreamUrl(imageResource.path),
+                    mediumThumbnailUrl = viewModel.getImageMediumThumbnailUrl(imageResource.path),
+                    title = imageResource.name
+                )
+            }
+            val initialIndex = imageResources
+                .indexOfFirst { it.path == resource.path }
+                .takeIf { it >= 0 }
+                ?: 0
+            val streamUrl = imageItems.getOrNull(initialIndex)?.url ?: viewModel.getStreamUrl(resource.path)
             Log.d("FileBrowserScreen", "Image clicked: ${streamUrl}")
-            onImageClick(streamUrl)
+            onImageClick(
+                imageItems.ifEmpty {
+                    listOf(
+                        ImageViewerItem(
+                            url = viewModel.getStreamUrl(resource.path),
+                            mediumThumbnailUrl = viewModel.getImageMediumThumbnailUrl(resource.path),
+                            title = resource.name
+                        )
+                    )
+                },
+                initialIndex
+            )
         }
         else -> {
             // 其他类型文件，暂不处理
@@ -743,6 +1140,76 @@ private fun RenameDialog(
                     )
                 } else {
                     Text("确认")
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isLoading) {
+                Text("取消")
+            }
+        }
+    )
+}
+
+/**
+ * 新建文件夹对话框
+ */
+@Composable
+private fun CreateDirectoryDialog(
+    currentPath: String,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var folderName by remember { mutableStateOf(TextFieldValue("")) }
+    var nameError by remember { mutableStateOf<String?>(null) }
+
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        title = { Text("新建文件夹") },
+        text = {
+            Column {
+                Text(
+                    text = "当前位置：$currentPath",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = folderName,
+                    onValueChange = {
+                        folderName = it
+                        nameError = null
+                    },
+                    label = { Text("文件夹名称") },
+                    singleLine = true,
+                    isError = nameError != null,
+                    supportingText = nameError?.let { { Text(it) } },
+                    enabled = !isLoading
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val trimmed = folderName.text.trim()
+                    if (trimmed.isEmpty()) {
+                        nameError = "名称不能为空"
+                    } else if (trimmed.contains('/') || trimmed.contains('\\')) {
+                        nameError = "名称不能包含路径分隔符"
+                    } else {
+                        onConfirm(trimmed)
+                    }
+                },
+                enabled = !isLoading
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("创建")
                 }
             }
         },

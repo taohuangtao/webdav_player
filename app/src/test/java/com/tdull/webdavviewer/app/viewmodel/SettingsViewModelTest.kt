@@ -20,6 +20,7 @@ import org.mockito.ArgumentMatchers.anyInt
 import org.mockito.Mock
 import org.mockito.MockitoAnnotations
 import org.mockito.kotlin.any
+import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
@@ -42,6 +43,8 @@ class SettingsViewModelTest {
     private lateinit var mockNetworkMonitor: NetworkMonitor
 
     private lateinit var viewModel: SettingsViewModel
+    private lateinit var serversFlow: MutableStateFlow<List<ServerConfig>>
+    private lateinit var activeServerIdFlow: MutableStateFlow<String?>
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -49,10 +52,12 @@ class SettingsViewModelTest {
     fun setup() {
         MockitoAnnotations.openMocks(this)
         Dispatchers.setMain(testDispatcher)
+        serversFlow = MutableStateFlow(emptyList())
+        activeServerIdFlow = MutableStateFlow(null)
 
         // 默认配置
-        whenever(mockConfigRepository.servers).thenReturn(flowOf(emptyList()))
-        whenever(mockConfigRepository.activeServerId).thenReturn(flowOf(null))
+        whenever(mockConfigRepository.servers).thenReturn(serversFlow)
+        whenever(mockConfigRepository.activeServerId).thenReturn(activeServerIdFlow)
         whenever(mockNetworkMonitor.networkStatus).thenReturn(flowOf(NetworkStatus(isAvailable = true)))
         whenever(mockNetworkMonitor.isNetworkAvailable()).thenReturn(true)
 
@@ -173,6 +178,70 @@ class SettingsViewModelTest {
 
         verify(mockConfigRepository).addServer(server)
         assertFalse(viewModel.uiState.value.showAddDialog)
+    }
+
+    // ========== copyServer 测试 ==========
+
+    @Test
+    fun `copyServer adds copied server with new id and copy name`() = runTest {
+        val server = ServerConfig(
+            id = "source-id",
+            name = "NAS",
+            url = "https://example.com/webdav",
+            username = "user",
+            password = "password"
+        )
+        serversFlow.value = listOf(server)
+        advanceUntilIdle()
+
+        viewModel.copyServer(server)
+        advanceUntilIdle()
+
+        val captor = argumentCaptor<ServerConfig>()
+        verify(mockConfigRepository).addServer(captor.capture())
+        val copied = captor.firstValue
+        assertNotEquals(server.id, copied.id)
+        assertEquals("NAS 副本", copied.name)
+        assertEquals(server.url, copied.url)
+        assertEquals(server.username, copied.username)
+        assertEquals(server.password, copied.password)
+    }
+
+    @Test
+    fun `copyServer increments copy name when duplicate exists`() = runTest {
+        val server = ServerConfig(
+            id = "source-id",
+            name = "NAS",
+            url = "https://example.com"
+        )
+        serversFlow.value = listOf(
+            server,
+            server.copy(id = "copy-1", name = "NAS 副本")
+        )
+        advanceUntilIdle()
+
+        viewModel.copyServer(server)
+        advanceUntilIdle()
+
+        val captor = argumentCaptor<ServerConfig>()
+        verify(mockConfigRepository).addServer(captor.capture())
+        assertEquals("NAS 副本 2", captor.firstValue.name)
+    }
+
+    @Test
+    fun `copyServer writes error when repository fails`() = runTest {
+        val server = ServerConfig(
+            id = "source-id",
+            name = "NAS",
+            url = "https://example.com"
+        )
+        whenever(mockConfigRepository.addServer(any())).thenThrow(RuntimeException("copy failed"))
+
+        viewModel.copyServer(server)
+        advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.error)
+        assertFalse(viewModel.uiState.value.isLoading)
     }
 
     // ========== deleteServer 测试 ==========

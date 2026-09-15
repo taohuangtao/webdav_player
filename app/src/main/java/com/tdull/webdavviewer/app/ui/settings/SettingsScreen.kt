@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Download
@@ -180,6 +181,7 @@ fun SettingsScreen(
                             isActive = server.id == uiState.activeServerId,
                             onActivate = { viewModel.setActiveServer(server.id) },
                             onEdit = { viewModel.showEditDialog(server) },
+                            onCopy = { viewModel.copyServer(server) },
                             onDelete = { viewModel.showDeleteConfirm(server) },
                             onClick = {
                                 viewModel.setActiveServer(server.id)
@@ -331,6 +333,7 @@ fun ServerItem(
     isActive: Boolean,
     onActivate: () -> Unit,
     onEdit: () -> Unit,
+    onCopy: () -> Unit,
     onDelete: () -> Unit,
     onClick: () -> Unit
 ) {
@@ -417,6 +420,16 @@ fun ServerItem(
                         onClick = {
                             showMenu = false
                             onEdit()
+                        }
+                    )
+                    MenuItemRow(
+                        icon = Icons.Default.ContentCopy,
+                        iconTint = IndigoPrimary,
+                        text = "复制",
+                        textColor = TextPrimary,
+                        onClick = {
+                            showMenu = false
+                            onCopy()
                         }
                     )
                     MenuItemRow(

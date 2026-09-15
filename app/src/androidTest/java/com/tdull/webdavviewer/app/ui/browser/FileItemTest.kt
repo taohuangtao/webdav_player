@@ -8,6 +8,8 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.longClick
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.ResourceType
@@ -137,5 +139,48 @@ class FileItemTest {
         composeTestRule.waitForIdle()
         // 进度百分比文本显示
         composeTestRule.onNodeWithText("45%").assertIsDisplayed()
+    }
+
+    @Test
+    fun gridFileItem_showsFileNameOnDefaultIcon() {
+        composeTestRule.setContent {
+            WebDAVViewerTheme {
+                GridFileItem(
+                    resource = testFile,
+                    thumbnailUrl = null,
+                    onClick = {}
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("video.mp4").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("视频").assertIsDisplayed()
+    }
+
+    @Test
+    fun gridFileItem_longPressShowsMenu() {
+        composeTestRule.setContent {
+            WebDAVViewerTheme {
+                GridFileItem(
+                    resource = testFile,
+                    thumbnailUrl = null,
+                    onClick = {},
+                    moreMenuContent = { onDismiss ->
+                        Text(
+                            text = "MENU_ITEM",
+                            modifier = Modifier.clickable { onDismiss() }
+                        )
+                    }
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("视频").performTouchInput {
+            longClick()
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("MENU_ITEM").assertIsDisplayed()
     }
 }

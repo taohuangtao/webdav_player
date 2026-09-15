@@ -78,6 +78,14 @@ class WebDAVRepositoryImpl @Inject constructor(
     override fun getStreamUrl(path: String): String {
         return client.getStreamUrl(path)
     }
+
+    override fun getImageThumbnailUrl(imagePath: String): String {
+        return client.getImageThumbnailUrl(imagePath)
+    }
+
+    override fun getImageMediumThumbnailUrl(imagePath: String): String {
+        return client.getImageMediumThumbnailUrl(imagePath)
+    }
     
     override suspend fun testConnection(config: ServerConfig): Result<Boolean> = withContext(Dispatchers.IO) {
         try {
@@ -94,6 +102,18 @@ class WebDAVRepositoryImpl @Inject constructor(
         try {
             val previews = client.getVideoPreviews(videoPath)
             Result.success(previews)
+        } catch (e: WebDAVException) {
+            Result.failure(e)
+        } catch (e: Exception) {
+            Result.failure(WebDAVException.ConnectionFailed(e))
+        }
+    }
+
+    override suspend fun createDirectory(parentPath: String, folderName: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            client.createDirectory(parentPath, folderName)
+            clearCache(parentPath)
+            Result.success(Unit)
         } catch (e: WebDAVException) {
             Result.failure(e)
         } catch (e: Exception) {

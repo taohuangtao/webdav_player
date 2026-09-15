@@ -2,11 +2,14 @@ package com.tdull.webdavviewer.app.viewmodel
 
 import android.app.Application
 import app.cash.turbine.test
+import com.tdull.webdavviewer.app.data.model.BrowserLayoutMode
+import com.tdull.webdavviewer.app.data.model.BrowserLayoutSettings
 import com.tdull.webdavviewer.app.data.model.DownloadItem
 import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.data.model.ServerConfig
 import com.tdull.webdavviewer.app.data.model.WebDAVException
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
+import com.tdull.webdavviewer.app.data.repository.BrowserLayoutSettingsRepository
 import com.tdull.webdavviewer.app.data.repository.ConfigRepository
 import com.tdull.webdavviewer.app.data.repository.DownloadsRepository
 import com.tdull.webdavviewer.app.data.repository.FavoritesRepository
@@ -14,6 +17,7 @@ import com.tdull.webdavviewer.app.data.repository.WebDAVRepository
 import com.tdull.webdavviewer.app.service.DownloadManager
 import com.tdull.webdavviewer.app.util.NetworkMonitor
 import com.tdull.webdavviewer.app.util.NetworkStatus
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,6 +51,9 @@ class FileBrowserViewModelTest {
     private lateinit var mockConfigRepository: ConfigRepository
 
     @Mock
+    private lateinit var mockBrowserLayoutSettingsRepository: BrowserLayoutSettingsRepository
+
+    @Mock
     private lateinit var mockNetworkMonitor: NetworkMonitor
 
     @Mock
@@ -59,6 +66,7 @@ class FileBrowserViewModelTest {
     private lateinit var mockDownloadManager: DownloadManager
 
     private lateinit var viewModel: FileBrowserViewModel
+    private lateinit var layoutSettingsFlow: MutableStateFlow<BrowserLayoutSettings>
 
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -75,6 +83,22 @@ class FileBrowserViewModelTest {
         whenever(mockFavoritesRepository.favorites).thenReturn(flowOf(emptyList<FavoriteItem>()))
         whenever(mockDownloadsRepository.downloads).thenReturn(flowOf(emptyList<DownloadItem>()))
         whenever(mockDownloadManager.downloadProgress).thenReturn(MutableStateFlow(emptyMap()))
+        layoutSettingsFlow = MutableStateFlow(BrowserLayoutSettings())
+        whenever(mockBrowserLayoutSettingsRepository.getLayoutSettings()).thenReturn(layoutSettingsFlow)
+        runBlocking {
+            whenever(mockBrowserLayoutSettingsRepository.saveLayoutMode(any())).thenAnswer { invocation ->
+                val mode = invocation.arguments[0] as BrowserLayoutMode
+                layoutSettingsFlow.value = layoutSettingsFlow.value.copy(layoutMode = mode)
+                Unit
+            }
+            whenever(mockBrowserLayoutSettingsRepository.saveGridColumns(any())).thenAnswer { invocation ->
+                val columns = invocation.arguments[0] as Int
+                layoutSettingsFlow.value = layoutSettingsFlow.value.copy(
+                    gridColumns = BrowserLayoutSettings.normalizeGridColumns(columns)
+                )
+                Unit
+            }
+        }
 
         // ErrorHandler 依赖 application.getString 获取文案，mock 默认返回 null 会导致 error 为 null 或抛 NPE
         whenever(mockApplication.getString(anyInt())).thenReturn("mock_title")
@@ -84,6 +108,7 @@ class FileBrowserViewModelTest {
             application = mockApplication,
             webDavRepository = mockWebDavRepository,
             configRepository = mockConfigRepository,
+            browserLayoutSettingsRepository = mockBrowserLayoutSettingsRepository,
             networkMonitor = mockNetworkMonitor,
             favoritesRepository = mockFavoritesRepository,
             downloadsRepository = mockDownloadsRepository,
@@ -109,6 +134,8 @@ class FileBrowserViewModelTest {
         assertFalse(initialState.isConnected)
         assertNull(initialState.currentServer)
         assertTrue(initialState.isNetworkAvailable)
+        assertEquals(BrowserLayoutMode.GRID, initialState.layoutMode)
+        assertEquals(4, initialState.gridColumns)
     }
 
     @Test
@@ -266,6 +293,82 @@ class FileBrowserViewModelTest {
         assertEquals(expectedUrl, result)
     }
 
+    @Test
+    fun `getImageThumbnailUrl returns correct URL`() {
+        val expectedUrl = "https://example.com/.thumbs/photo.png.jpg"
+        whenever(mockWebDavRepository.getImageThumbnailUrl("/photo.png")).thenReturn(expectedUrl)
+
+        val result = viewModel.getImageThumbnailUrl("/photo.png")
+
+        assertEquals(expectedUrl, result)
+    }
+
+    @Test
+    fun `getImageMediumThumbnailUrl returns correct URL`() {
+        val expectedUrl = "https://example.com/.thumbs/photo.png.m.jpg"
+        whenever(mockWebDavRepository.getImageMediumThumbnailUrl("/photo.png")).thenReturn(expectedUrl)
+
+        val result = viewModel.getImageMediumThumbnailUrl("/photo.png")
+
+        assertEquals(expectedUrl, result)
+    }
+
+    // ========== 文件布局设置测试 ==========
+
+    @Test
+    fun `layout settings are loaded from repository`() = runTest {
+        layoutSettingsFlow.value = BrowserLayoutSettings(
+            layoutMode = BrowserLayoutMode.LIST,
+            gridColumns = 6
+        )
+
+        assertEquals(BrowserLayoutMode.LIST, viewModel.uiState.value.layoutMode)
+        assertEquals(6, viewModel.uiState.value.gridColumns)
+    }
+
+    @Test
+    fun `toggleLayoutMode saves next mode`() = runTest {
+        viewModel.toggleLayoutMode()
+
+        verify(mockBrowserLayoutSettingsRepository).saveLayoutMode(BrowserLayoutMode.LIST)
+        assertEquals(BrowserLayoutMode.LIST, viewModel.uiState.value.layoutMode)
+
+        viewModel.toggleLayoutMode()
+
+        verify(mockBrowserLayoutSettingsRepository).saveLayoutMode(BrowserLayoutMode.GRID)
+        assertEquals(BrowserLayoutMode.GRID, viewModel.uiState.value.layoutMode)
+    }
+
+    @Test
+    fun `increaseGridColumns saves incremented bounded value`() = runTest {
+        layoutSettingsFlow.value = BrowserLayoutSettings(gridColumns = 7)
+
+        viewModel.increaseGridColumns()
+
+        verify(mockBrowserLayoutSettingsRepository).saveGridColumns(8)
+        assertEquals(8, viewModel.uiState.value.gridColumns)
+
+        viewModel.increaseGridColumns()
+
+        verify(mockBrowserLayoutSettingsRepository, times(2)).saveGridColumns(8)
+        assertEquals(8, viewModel.uiState.value.gridColumns)
+    }
+
+    @Test
+    fun `decreaseGridColumns saves decremented bounded value`() = runTest {
+        layoutSettingsFlow.value = BrowserLayoutSettings(gridColumns = 3)
+
+        viewModel.decreaseGridColumns()
+
+        verify(mockBrowserLayoutSettingsRepository).saveGridColumns(2)
+        assertEquals(2, viewModel.uiState.value.gridColumns)
+
+        viewModel.decreaseGridColumns()
+
+        verify(mockBrowserLayoutSettingsRepository, times(2)).saveGridColumns(2)
+        assertEquals(2, viewModel.uiState.value.gridColumns)
+    }
+
     // ========== 隐藏文件显示测试 ==========
 
     /**
@@ -386,5 +489,43 @@ class FileBrowserViewModelTest {
 
         assertNull(viewModel.uiState.value.error)
         assertNull(viewModel.uiState.value.errorInfo)
+    }
+
+    // ========== 创建文件夹测试 ==========
+
+    @Test
+    fun `createDirectory uses current root path and refreshes on success`() = runTest {
+        whenever(mockWebDavRepository.createDirectory("/", "NewFolder")).thenReturn(Result.success(Unit))
+        whenever(mockWebDavRepository.listFiles("/", false)).thenReturn(Result.success(emptyList()))
+
+        viewModel.createDirectory("NewFolder")
+
+        verify(mockWebDavRepository).createDirectory("/", "NewFolder")
+        verify(mockWebDavRepository).listFiles("/", false)
+        assertEquals("已创建文件夹 \"NewFolder\"", viewModel.uiState.value.operationSuccess)
+        assertFalse(viewModel.uiState.value.isOperationLoading)
+    }
+
+    @Test
+    fun `createDirectory uses current navigated path`() = runTest {
+        whenever(mockWebDavRepository.listFiles(any(), any<Boolean>())).thenReturn(Result.success(emptyList()))
+        whenever(mockWebDavRepository.createDirectory("/subfolder", "NewFolder")).thenReturn(Result.success(Unit))
+
+        viewModel.navigateTo("/subfolder")
+        viewModel.createDirectory("NewFolder")
+
+        verify(mockWebDavRepository).createDirectory("/subfolder", "NewFolder")
+    }
+
+    @Test
+    fun `createDirectory writes operationError on failure`() = runTest {
+        whenever(mockWebDavRepository.createDirectory("/", "NewFolder"))
+            .thenReturn(Result.failure(WebDAVException.OperationFailed("创建失败")))
+
+        viewModel.createDirectory("NewFolder")
+
+        verify(mockWebDavRepository).createDirectory("/", "NewFolder")
+        assertEquals("创建失败", viewModel.uiState.value.operationError)
+        assertFalse(viewModel.uiState.value.isOperationLoading)
     }
 }

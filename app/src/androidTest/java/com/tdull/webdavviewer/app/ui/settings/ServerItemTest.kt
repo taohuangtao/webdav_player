@@ -34,6 +34,7 @@ class ServerItemTest {
         isActive: Boolean,
         onActivate: () -> Unit = {},
         onEdit: () -> Unit = {},
+        onCopy: () -> Unit = {},
         onDelete: () -> Unit = {}
     ) {
         composeTestRule.setContent {
@@ -43,6 +44,7 @@ class ServerItemTest {
                     isActive = isActive,
                     onActivate = onActivate,
                     onEdit = onEdit,
+                    onCopy = onCopy,
                     onDelete = onDelete,
                     onClick = {}
                 )
@@ -57,6 +59,7 @@ class ServerItemTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("设为当前").assertDoesNotExist()
         composeTestRule.onNodeWithText("编辑").assertDoesNotExist()
+        composeTestRule.onNodeWithText("复制").assertDoesNotExist()
         composeTestRule.onNodeWithText("删除").assertDoesNotExist()
     }
 
@@ -68,6 +71,7 @@ class ServerItemTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("设为当前").assertIsDisplayed()
         composeTestRule.onNodeWithText("编辑").assertIsDisplayed()
+        composeTestRule.onNodeWithText("复制").assertIsDisplayed()
         composeTestRule.onNodeWithText("删除").assertIsDisplayed()
     }
 
@@ -79,6 +83,7 @@ class ServerItemTest {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("设为当前").assertDoesNotExist()
         composeTestRule.onNodeWithText("编辑").assertIsDisplayed()
+        composeTestRule.onNodeWithText("复制").assertIsDisplayed()
         composeTestRule.onNodeWithText("删除").assertIsDisplayed()
     }
 
@@ -106,6 +111,19 @@ class ServerItemTest {
         composeTestRule.waitForIdle()
         assertEquals(true, edited)
         composeTestRule.onNodeWithText("编辑").assertDoesNotExist()
+    }
+
+    @Test
+    fun clickCopy_triggersCallbackAndCloses() {
+        // 点击"复制"触发 onCopy 并关闭菜单
+        var copied = false
+        setServerItemContent(isActive = false, onCopy = { copied = true })
+        composeTestRule.onNodeWithContentDescription("更多操作").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("复制").performClick()
+        composeTestRule.waitForIdle()
+        assertEquals(true, copied)
+        composeTestRule.onNodeWithText("复制").assertDoesNotExist()
     }
 
     @Test

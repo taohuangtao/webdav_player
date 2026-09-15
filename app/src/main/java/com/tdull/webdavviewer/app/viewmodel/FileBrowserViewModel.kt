@@ -3,12 +3,15 @@ package com.tdull.webdavviewer.app.viewmodel
 import android.app.Application
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.tdull.webdavviewer.app.data.model.BrowserLayoutMode
+import com.tdull.webdavviewer.app.data.model.BrowserLayoutSettings
 import com.tdull.webdavviewer.app.data.model.DownloadItem
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.data.model.ServerConfig
 import com.tdull.webdavviewer.app.data.model.WebDAVException
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
+import com.tdull.webdavviewer.app.data.repository.BrowserLayoutSettingsRepository
 import com.tdull.webdavviewer.app.data.repository.ConfigRepository
 import com.tdull.webdavviewer.app.data.repository.FavoritesRepository
 import com.tdull.webdavviewer.app.data.repository.DownloadsRepository
@@ -43,7 +46,9 @@ data class FileBrowserUiState(
     val isOperationLoading: Boolean = false,
     val operationError: String? = null,
     val operationSuccess: String? = null,
-    val showHidden: Boolean = false
+    val showHidden: Boolean = false,
+    val layoutMode: BrowserLayoutMode = BrowserLayoutMode.GRID,
+    val gridColumns: Int = BrowserLayoutSettings.DEFAULT_GRID_COLUMNS
 )
 
 /**
@@ -54,6 +59,7 @@ class FileBrowserViewModel @Inject constructor(
     private val application: Application,
     private val webDavRepository: WebDAVRepository,
     private val configRepository: ConfigRepository,
+    private val browserLayoutSettingsRepository: BrowserLayoutSettingsRepository,
     private val networkMonitor: NetworkMonitor,
     private val favoritesRepository: FavoritesRepository,
     private val downloadsRepository: DownloadsRepository,
@@ -100,6 +106,18 @@ class FileBrowserViewModel @Inject constructor(
         viewModelScope.launch {
             networkMonitor.networkStatus.collect { status ->
                 _uiState.update { it.copy(isNetworkAvailable = status.isAvailable) }
+            }
+        }
+
+        // 监听文件浏览器布局设置
+        viewModelScope.launch {
+            browserLayoutSettingsRepository.getLayoutSettings().collect { settings ->
+                _uiState.update {
+                    it.copy(
+                        layoutMode = settings.layoutMode,
+                        gridColumns = BrowserLayoutSettings.normalizeGridColumns(settings.gridColumns)
+                    )
+                }
             }
         }
 
@@ -251,10 +269,59 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     /**
+     * 切换文件列表布局模式
+     */
+    fun toggleLayoutMode() {
+        val nextMode = if (_uiState.value.layoutMode == BrowserLayoutMode.GRID) {
+            BrowserLayoutMode.LIST
+        } else {
+            BrowserLayoutMode.GRID
+        }
+
+        viewModelScope.launch {
+            browserLayoutSettingsRepository.saveLayoutMode(nextMode)
+        }
+    }
+
+    /**
+     * 增加网格列数
+     */
+    fun increaseGridColumns() {
+        val nextColumns = BrowserLayoutSettings.normalizeGridColumns(_uiState.value.gridColumns + 1)
+        viewModelScope.launch {
+            browserLayoutSettingsRepository.saveGridColumns(nextColumns)
+        }
+    }
+
+    /**
+     * 减少网格列数
+     */
+    fun decreaseGridColumns() {
+        val nextColumns = BrowserLayoutSettings.normalizeGridColumns(_uiState.value.gridColumns - 1)
+        viewModelScope.launch {
+            browserLayoutSettingsRepository.saveGridColumns(nextColumns)
+        }
+    }
+
+    /**
      * 获取流媒体URL
      */
     fun getStreamUrl(path: String): String {
         return webDavRepository.getStreamUrl(path)
+    }
+
+    /**
+     * 获取图片缩略图URL
+     */
+    fun getImageThumbnailUrl(path: String): String {
+        return webDavRepository.getImageThumbnailUrl(path)
+    }
+
+    /**
+     * 获取图片中等缩略图URL
+     */
+    fun getImageMediumThumbnailUrl(path: String): String {
+        return webDavRepository.getImageMediumThumbnailUrl(path)
     }
     
     /**
@@ -521,6 +588,22 @@ class FileBrowserViewModel @Inject constructor(
             handleOperationResult(
                 result = result,
                 successMessage = "已删除 \"${resource.name}\""
+            )
+        }
+    }
+
+    /**
+     * 在当前目录创建文件夹
+     * @param folderName 新文件夹名称
+     */
+    fun createDirectory(folderName: String) {
+        val trimmedName = folderName.trim()
+        viewModelScope.launch {
+            _uiState.update { it.copy(isOperationLoading = true, operationError = null, operationSuccess = null) }
+            val result = webDavRepository.createDirectory(_currentPath.value, trimmedName)
+            handleOperationResult(
+                result = result,
+                successMessage = "已创建文件夹 \"$trimmedName\""
             )
         }
     }

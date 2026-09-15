@@ -28,6 +28,22 @@ interface WebDAVRepository {
      * @return 流媒体URL
      */
     fun getStreamUrl(path: String): String
+
+    /**
+     * 获取图片缩略图URL
+     * 缩略图位于图片同目录下的 .thumbs 目录，文件名为源文件名 + ".jpg"
+     * @param imagePath 图片文件路径
+     * @return 缩略图URL
+     */
+    fun getImageThumbnailUrl(imagePath: String): String
+
+    /**
+     * 获取图片中等缩略图URL
+     * 中等缩略图位于图片同目录下的 .thumbs 目录，文件名为源文件名 + ".m.jpg"
+     * @param imagePath 图片文件路径
+     * @return 中等缩略图URL
+     */
+    fun getImageMediumThumbnailUrl(imagePath: String): String
     
     /**
      * 测试服务器连接
@@ -42,6 +58,14 @@ interface WebDAVRepository {
      * @return 预览图URL列表
      */
     suspend fun getVideoPreviews(videoPath: String): Result<List<String>>
+
+    /**
+     * 在指定目录下创建文件夹
+     * @param parentPath 父目录路径
+     * @param folderName 新文件夹名称
+     * @return 操作结果
+     */
+    suspend fun createDirectory(parentPath: String, folderName: String): Result<Unit>
     
     /**
      * 重命名文件或文件夹

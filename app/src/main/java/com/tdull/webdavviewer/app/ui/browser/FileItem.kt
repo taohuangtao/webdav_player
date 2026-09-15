@@ -49,6 +49,7 @@ private val AmberLight = Color(0xFFFFFBEB)       // 文件橙浅底
 fun FileItem(
     resource: WebDAVResource,
     onClick: () -> Unit,
+    thumbnailUrl: String? = null,
     previewImages: List<String> = emptyList(),
     onPreviewClick: (List<String>, Int) -> Unit = { _, _ -> },
     onLoadPreviews: () -> Unit = {},
@@ -59,8 +60,6 @@ fun FileItem(
     modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
-    val icon = getResourceIcon(resource.resourceType)
-    val iconColor = getResourceIconColor(resource.resourceType)
     val hasPreviews = resource.isVideo && previewImages.isNotEmpty()
     
     // 视频文件时，自动触发预览图加载
@@ -81,20 +80,10 @@ fun FileItem(
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 图标（彩色浅底方块，设计稿风格）
-            Box(
-                modifier = Modifier
-                    .size(34.dp)
-                    .background(getResourceIconBg(resource.resourceType), RoundedCornerShape(10.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = getResourceTypeName(resource.resourceType),
-                    tint = iconColor,
-                    modifier = Modifier.size(17.dp)
-                )
-            }
+            ResourceLeadingVisual(
+                resource = resource,
+                thumbnailUrl = thumbnailUrl
+            )
             
             Spacer(modifier = Modifier.width(12.dp))
                 
@@ -282,6 +271,81 @@ private fun PreviewImageItem(
 }
 
 /**
+ * 文件列表左侧资源图标/缩略图
+ */
+@Composable
+private fun ResourceLeadingVisual(
+    resource: WebDAVResource,
+    thumbnailUrl: String?,
+    modifier: Modifier = Modifier
+) {
+    val shape = RoundedCornerShape(10.dp)
+    val icon = getResourceIcon(resource.resourceType)
+    val iconColor = getResourceIconColor(resource.resourceType)
+    val iconBg = getResourceIconBg(resource.resourceType)
+
+    if (resource.isImage && thumbnailUrl != null) {
+        var thumbnailLoaded by remember(thumbnailUrl) { mutableStateOf(false) }
+
+        Box(
+            modifier = modifier
+                .size(34.dp)
+                .clip(shape)
+                .background(iconBg),
+            contentAlignment = Alignment.Center
+        ) {
+            if (!thumbnailLoaded) {
+                ResourceIcon(
+                    icon = icon,
+                    contentDescription = getResourceTypeName(resource.resourceType),
+                    tint = iconColor
+                )
+            }
+
+            AsyncImage(
+                model = thumbnailUrl,
+                contentDescription = "图片缩略图",
+                modifier = Modifier.matchParentSize(),
+                contentScale = ContentScale.Crop,
+                onLoading = { thumbnailLoaded = false },
+                onSuccess = { thumbnailLoaded = true },
+                onError = { thumbnailLoaded = false }
+            )
+        }
+    } else {
+        Box(
+            modifier = modifier
+                .size(34.dp)
+                .background(iconBg, shape),
+            contentAlignment = Alignment.Center
+        ) {
+            ResourceIcon(
+                icon = icon,
+                contentDescription = getResourceTypeName(resource.resourceType),
+                tint = iconColor
+            )
+        }
+    }
+}
+
+/**
+ * 默认资源图标
+ */
+@Composable
+private fun ResourceIcon(
+    icon: ImageVector,
+    contentDescription: String,
+    tint: Color
+) {
+    Icon(
+        imageVector = icon,
+        contentDescription = contentDescription,
+        tint = tint,
+        modifier = Modifier.size(17.dp)
+    )
+}
+
+/**
  * 根据资源类型获取图标
  */
 @Composable
@@ -289,7 +353,7 @@ private fun getResourceIcon(type: ResourceType): ImageVector {
     return when (type) {
         ResourceType.DIRECTORY -> Icons.Filled.Folder
         ResourceType.VIDEO -> Icons.Default.PlayArrow
-        ResourceType.IMAGE -> Icons.Default.Person
+        ResourceType.IMAGE -> Icons.Default.Image
         ResourceType.AUDIO -> Icons.Default.Phone
         ResourceType.OTHER -> Icons.Default.Info
     }

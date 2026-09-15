@@ -218,6 +218,28 @@ class WebDAVRepositoryImplTest {
         verify(mockClient).getStreamUrl("/video.mp4")
     }
 
+    @Test
+    fun `getImageThumbnailUrl delegates to client`() {
+        val expectedUrl = "https://example.com/.thumbs/photo.png.jpg"
+        `when`(mockClient.getImageThumbnailUrl("/photo.png")).thenReturn(expectedUrl)
+
+        val result = repository.getImageThumbnailUrl("/photo.png")
+
+        assertEquals(expectedUrl, result)
+        verify(mockClient).getImageThumbnailUrl("/photo.png")
+    }
+
+    @Test
+    fun `getImageMediumThumbnailUrl delegates to client`() {
+        val expectedUrl = "https://example.com/.thumbs/photo.png.m.jpg"
+        `when`(mockClient.getImageMediumThumbnailUrl("/photo.png")).thenReturn(expectedUrl)
+
+        val result = repository.getImageMediumThumbnailUrl("/photo.png")
+
+        assertEquals(expectedUrl, result)
+        verify(mockClient).getImageMediumThumbnailUrl("/photo.png")
+    }
+
     // ========== 缓存测试 ==========
 
     @Test
@@ -328,6 +350,39 @@ class WebDAVRepositoryImplTest {
         // 重命名后再次加载源目录应重新调用 client（缓存已清除）
         repository.listFiles("/folder/")
         verify(mockClient, times(2)).listFiles("/folder/", false)
+    }
+
+    @Test
+    fun `createDirectory delegates to client and returns success`() = runTest {
+        val result = repository.createDirectory("/folder", "NewFolder")
+
+        assertTrue(result.isSuccess)
+        verify(mockClient).createDirectory("/folder", "NewFolder")
+    }
+
+    @Test
+    fun `createDirectory clears parent directory cache`() = runTest {
+        val parentFiles = listOf(createResource("/folder/file.txt", "file.txt"))
+        `when`(mockClient.listFiles("/folder", false)).thenReturn(parentFiles)
+
+        repository.listFiles("/folder")
+        verify(mockClient, times(1)).listFiles("/folder", false)
+
+        repository.createDirectory("/folder", "NewFolder")
+
+        repository.listFiles("/folder")
+        verify(mockClient, times(2)).listFiles("/folder", false)
+    }
+
+    @Test
+    fun `createDirectory returns failure when client throws exception`() = runTest {
+        `when`(mockClient.createDirectory("/folder", "NewFolder"))
+            .thenThrow(RuntimeException("模拟异常"))
+
+        val result = repository.createDirectory("/folder", "NewFolder")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is WebDAVException.ConnectionFailed)
     }
 
     @Test

@@ -296,6 +296,47 @@ class WebDAVClient @Inject constructor(
     }
 
     /**
+     * 获取图片缩略图URL
+     * 图片 /photos/a.png -> 缩略图 /photos/.thumbs/a.png.jpg
+     */
+    fun getImageThumbnailUrl(imagePath: String): String {
+        return getStreamUrl(getImageThumbnailPath(imagePath))
+    }
+
+    /**
+     * 获取图片中等缩略图URL
+     * 图片 /photos/a.png -> 中等缩略图 /photos/.thumbs/a.png.m.jpg
+     */
+    fun getImageMediumThumbnailUrl(imagePath: String): String {
+        return getStreamUrl(getImageThumbnailPath(imagePath, suffix = ".m.jpg"))
+    }
+
+    /**
+     * 根据图片路径计算缩略图路径
+     */
+    private fun getImageThumbnailPath(imagePath: String, suffix: String = ".jpg"): String {
+        val normalizedPath = imagePath.trimStart('/').trimEnd('/')
+        val lastSlashIndex = normalizedPath.lastIndexOf('/')
+        val dirPath = if (lastSlashIndex >= 0) {
+            normalizedPath.substring(0, lastSlashIndex)
+        } else {
+            ""
+        }
+        val fileName = if (lastSlashIndex >= 0) {
+            normalizedPath.substring(lastSlashIndex + 1)
+        } else {
+            normalizedPath
+        }
+        val thumbnailName = "$fileName$suffix"
+
+        return if (dirPath.isEmpty()) {
+            "/.thumbs/$thumbnailName"
+        } else {
+            "/$dirPath/.thumbs/$thumbnailName"
+        }
+    }
+
+    /**
      * 重命名文件或文件夹
      * 重命名本质上是移动到父目录下新的名称，即 MOVE 操作
      * @param sourcePath 源资源路径，如 "/movies/aaa.mp4"
@@ -356,6 +397,33 @@ class WebDAVClient @Inject constructor(
             response.use {
                 if (!it.isSuccessful) {
                     handleWriteErrorResponse(it)
+                }
+            }
+        } catch (e: WebDAVException) {
+            throw e
+        } catch (e: Exception) {
+            throw WebDAVException.ConnectionFailed(e)
+        }
+    }
+
+    /**
+     * 创建文件夹
+     * @param parentPath 父目录路径，如 "/" 或 "/movies"
+     * @param folderName 新文件夹名称
+     */
+    fun createDirectory(parentPath: String, folderName: String) {
+        val config = currentConfig ?: throw IllegalStateException("未配置服务器")
+        checkWriteSupport()
+
+        val directoryPath = buildChildDirectoryPath(parentPath, folderName)
+        val url = buildResourceUrl(config, directoryPath, isDirectory = true)
+        val request = buildDavRequest(url, config, "MKCOL")
+
+        try {
+            val response = okHttpClient.newCall(request).execute()
+            response.use {
+                if (!it.isSuccessful) {
+                    handleCreateDirectoryErrorResponse(it)
                 }
             }
         } catch (e: WebDAVException) {
@@ -472,6 +540,24 @@ class WebDAVClient @Inject constructor(
             "$baseUrl$encoded"
         }
     }
+
+    /**
+     * 构建子目录路径
+     * parent="/" + folderName="New" -> "/New/"
+     * parent="/movies" + folderName="New" -> "/movies/New/"
+     */
+    private fun buildChildDirectoryPath(parentPath: String, folderName: String): String {
+        val normalizedParent = parentPath
+            .ifBlank { "/" }
+            .let { if (it.startsWith("/")) it else "/$it" }
+            .trimEnd('/')
+
+        return if (normalizedParent.isEmpty()) {
+            "/$folderName/"
+        } else {
+            "$normalizedParent/$folderName/"
+        }
+    }
     
     /**
      * 构建PROPFIND请求
@@ -531,6 +617,20 @@ class WebDAVClient @Inject constructor(
             400, 409 -> throw WebDAVException.OperationFailed("操作失败：目标资源已存在或路径冲突")
             in 500..599 -> throw WebDAVException.ServerError(response.code, response.message)
             else -> throw WebDAVException.OperationFailed("操作失败 (${response.code}): ${response.message}")
+        }
+    }
+
+    /**
+     * 处理创建文件夹的错误响应
+     */
+    private fun handleCreateDirectoryErrorResponse(response: Response): Nothing {
+        when (response.code) {
+            401 -> throw WebDAVException.AuthenticationFailed()
+            403 -> throw WebDAVException.OperationFailed("没有权限创建文件夹，可能被服务器拒绝")
+            405 -> throw WebDAVException.OperationFailed("创建文件夹失败：文件夹已存在或服务器不支持创建")
+            409 -> throw WebDAVException.OperationFailed("创建文件夹失败：父目录不存在或路径冲突")
+            in 500..599 -> throw WebDAVException.ServerError(response.code, response.message)
+            else -> throw WebDAVException.OperationFailed("创建文件夹失败 (${response.code}): ${response.message}")
         }
     }
     

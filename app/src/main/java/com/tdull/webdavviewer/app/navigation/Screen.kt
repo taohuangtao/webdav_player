@@ -34,12 +34,14 @@ sealed class Screen(val route: String) {
      * 图片查看器页面
      * @param url 图片URL（需编码）
      * @param title 图片标题（需编码）
+     * @param thumbnailUrl 图片中等缩略图URL（需编码）
      */
-    object ImageViewer : Screen("image?url={url}&title={title}") {
-        fun createRoute(url: String, title: String = ""): String {
+    object ImageViewer : Screen("image?url={url}&title={title}&thumbnailUrl={thumbnailUrl}") {
+        fun createRoute(url: String, title: String = "", thumbnailUrl: String = ""): String {
             val encodedUrl = java.net.URLEncoder.encode(url, "UTF-8")
             val encodedTitle = java.net.URLEncoder.encode(title, "UTF-8")
-            return "image?url=$encodedUrl&title=$encodedTitle"
+            val encodedThumbnailUrl = java.net.URLEncoder.encode(thumbnailUrl, "UTF-8")
+            return "image?url=$encodedUrl&title=$encodedTitle&thumbnailUrl=$encodedThumbnailUrl"
         }
     }
 
