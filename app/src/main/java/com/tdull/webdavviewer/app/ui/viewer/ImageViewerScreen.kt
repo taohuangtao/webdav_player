@@ -104,11 +104,13 @@ fun ImageViewerScreen(
     var scale by remember { mutableFloatStateOf(1f) }
     var offsetX by remember { mutableFloatStateOf(0f) }
     var offsetY by remember { mutableFloatStateOf(0f) }
+    var isTransformGestureActive by remember { mutableStateOf(false) }
 
     fun resetTransform() {
         scale = 1f
         offsetX = 0f
         offsetY = 0f
+        isTransformGestureActive = false
     }
 
     // 控制栏显示状态
@@ -160,7 +162,7 @@ fun ImageViewerScreen(
     ) {
         HorizontalPager(
             state = pagerState,
-            userScrollEnabled = scale <= 1f,
+            userScrollEnabled = scale <= 1f && !isTransformGestureActive,
             modifier = Modifier.fillMaxSize()
         ) { page ->
             val item = viewerItems[page]
@@ -198,6 +200,11 @@ fun ImageViewerScreen(
                 onResetTransform = { if (isCurrentPage) resetTransform() },
                 onStateChange = { state ->
                     pageStates[page] = state
+                },
+                onTransformGestureActiveChange = { active ->
+                    if (isCurrentPage) {
+                        isTransformGestureActive = active
+                    }
                 }
             )
         }
@@ -252,6 +259,7 @@ private fun ImageViewerPage(
     onDoubleTap: () -> Unit,
     onResetTransform: () -> Unit,
     onStateChange: (ImagePageUiState) -> Unit,
+    onTransformGestureActiveChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var currentSource by remember(item) {
@@ -273,6 +281,9 @@ private fun ImageViewerPage(
     } else {
         item.url
     }
+    val latestScale by rememberUpdatedState(scale)
+    val latestOnTransform by rememberUpdatedState(onTransform)
+    val latestOnTransformGestureActiveChange by rememberUpdatedState(onTransformGestureActiveChange)
 
     LaunchedEffect(originalRequestVersion) {
         if (originalRequestVersion > 0 && currentSource != ImageLoadSource.ORIGINAL) {
@@ -314,27 +325,37 @@ private fun ImageViewerPage(
                     translationX = offsetX,
                     translationY = offsetY
                 )
-                .pointerInput(scale) {
+                .pointerInput(Unit) {
                     awaitEachGesture {
                         awaitFirstDown(requireUnconsumed = false)
-                        do {
-                            val event = awaitPointerEvent()
-                            val pressedCount = event.changes.count { it.pressed }
-                            val shouldHandleTransform = scale > 1f || pressedCount > 1
+                        var isHandlingTransform = false
+                        try {
+                            do {
+                                val event = awaitPointerEvent()
+                                val pressedCount = event.changes.count { it.pressed }
+                                val shouldHandleTransform = latestScale > 1f || pressedCount > 1
 
-                            if (shouldHandleTransform) {
-                                val zoom = event.calculateZoom()
-                                val pan = event.calculatePan()
-                                if (zoom != 1f || pan != Offset.Zero) {
-                                    onTransform(pan, zoom)
-                                    event.changes.forEach { change ->
-                                        if (change.positionChanged()) {
-                                            change.consume()
+                                if (shouldHandleTransform != isHandlingTransform) {
+                                    isHandlingTransform = shouldHandleTransform
+                                    latestOnTransformGestureActiveChange(isHandlingTransform)
+                                }
+
+                                if (shouldHandleTransform) {
+                                    val zoom = event.calculateZoom()
+                                    val pan = event.calculatePan()
+                                    if (zoom != 1f || pan != Offset.Zero) {
+                                        latestOnTransform(pan, zoom)
+                                        event.changes.forEach { change ->
+                                            if (change.positionChanged()) {
+                                                change.consume()
+                                            }
                                         }
                                     }
                                 }
-                            }
-                        } while (event.changes.any { it.pressed })
+                            } while (event.changes.any { it.pressed })
+                        } finally {
+                            latestOnTransformGestureActiveChange(false)
+                        }
                     }
                 }
                 .pointerInput(Unit) {
