@@ -296,11 +296,19 @@ class WebDAVClient @Inject constructor(
     }
 
     /**
+     * 获取资源缩略图URL
+     * 资源 /photos/a.png -> 缩略图 /photos/.thumbs/a.png.jpg
+     */
+    fun getResourceThumbnailUrl(path: String): String {
+        return getStreamUrl(getResourceThumbnailPath(path))
+    }
+
+    /**
      * 获取图片缩略图URL
      * 图片 /photos/a.png -> 缩略图 /photos/.thumbs/a.png.jpg
      */
     fun getImageThumbnailUrl(imagePath: String): String {
-        return getStreamUrl(getImageThumbnailPath(imagePath))
+        return getResourceThumbnailUrl(imagePath)
     }
 
     /**
@@ -308,14 +316,14 @@ class WebDAVClient @Inject constructor(
      * 图片 /photos/a.png -> 中等缩略图 /photos/.thumbs/a.png.m.jpg
      */
     fun getImageMediumThumbnailUrl(imagePath: String): String {
-        return getStreamUrl(getImageThumbnailPath(imagePath, suffix = ".m.jpg"))
+        return getStreamUrl(getResourceThumbnailPath(imagePath, suffix = ".m.jpg"))
     }
 
     /**
-     * 根据图片路径计算缩略图路径
+     * 根据资源路径计算缩略图路径
      */
-    private fun getImageThumbnailPath(imagePath: String, suffix: String = ".jpg"): String {
-        val normalizedPath = imagePath.trimStart('/').trimEnd('/')
+    private fun getResourceThumbnailPath(path: String, suffix: String = ".jpg"): String {
+        val normalizedPath = path.trimStart('/').trimEnd('/')
         val lastSlashIndex = normalizedPath.lastIndexOf('/')
         val dirPath = if (lastSlashIndex >= 0) {
             normalizedPath.substring(0, lastSlashIndex)

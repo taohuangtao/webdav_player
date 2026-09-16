@@ -348,6 +348,13 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     /**
+     * 获取资源缩略图URL
+     */
+    fun getResourceThumbnailUrl(path: String): String {
+        return webDavRepository.getResourceThumbnailUrl(path)
+    }
+
+    /**
      * 获取图片缩略图URL
      */
     fun getImageThumbnailUrl(path: String): String {

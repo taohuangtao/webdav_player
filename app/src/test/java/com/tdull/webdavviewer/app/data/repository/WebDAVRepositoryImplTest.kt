@@ -219,6 +219,17 @@ class WebDAVRepositoryImplTest {
     }
 
     @Test
+    fun `getResourceThumbnailUrl delegates to client`() {
+        val expectedUrl = "https://example.com/.thumbs/video.mp4.jpg"
+        `when`(mockClient.getResourceThumbnailUrl("/video.mp4")).thenReturn(expectedUrl)
+
+        val result = repository.getResourceThumbnailUrl("/video.mp4")
+
+        assertEquals(expectedUrl, result)
+        verify(mockClient).getResourceThumbnailUrl("/video.mp4")
+    }
+
+    @Test
     fun `getImageThumbnailUrl delegates to client`() {
         val expectedUrl = "https://example.com/.thumbs/photo.png.jpg"
         `when`(mockClient.getImageThumbnailUrl("/photo.png")).thenReturn(expectedUrl)

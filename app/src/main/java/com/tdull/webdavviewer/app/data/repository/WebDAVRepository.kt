@@ -30,6 +30,14 @@ interface WebDAVRepository {
     fun getStreamUrl(path: String): String
 
     /**
+     * 获取资源缩略图URL
+     * 缩略图位于资源同目录下的 .thumbs 目录，文件名为源文件名 + ".jpg"
+     * @param path 文件路径
+     * @return 缩略图URL
+     */
+    fun getResourceThumbnailUrl(path: String): String
+
+    /**
      * 获取图片缩略图URL
      * 缩略图位于图片同目录下的 .thumbs 目录，文件名为源文件名 + ".jpg"
      * @param imagePath 图片文件路径

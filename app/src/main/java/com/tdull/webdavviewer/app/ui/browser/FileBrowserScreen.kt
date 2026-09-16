@@ -292,8 +292,8 @@ fun FileBrowserScreen(
                         onLoadPreviews = { path ->
                             viewModel.loadVideoPreviews(path)
                         },
-                        getImageThumbnailUrl = { path ->
-                            viewModel.getImageThumbnailUrl(path)
+                        getResourceThumbnailUrl = { path ->
+                            viewModel.getResourceThumbnailUrl(path)
                         },
                         onToggleFavorite = { resource ->
                             viewModel.toggleFavorite(resource)
@@ -493,6 +493,9 @@ private data class PreviewState(
     val initialIndex: Int
 )
 
+private val WebDAVResource.hasFileBrowserThumbnail: Boolean
+    get() = isImage || isVideo
+
 /**
  * 文件列表
  */
@@ -507,7 +510,7 @@ private fun FileList(
     onFileClick: (WebDAVResource) -> Unit,
     onPreviewClick: (List<String>, Int) -> Unit,
     onLoadPreviews: (String) -> Unit,
-    getImageThumbnailUrl: (String) -> String,
+    getResourceThumbnailUrl: (String) -> String,
     onToggleFavorite: (WebDAVResource) -> Unit,
     onDownloadClick: (WebDAVResource) -> Unit,
     onRetryDownload: (WebDAVResource) -> Unit,
@@ -533,8 +536,8 @@ private fun FileList(
                 val resource = files[index]
                 GridFileItem(
                     resource = resource,
-                    thumbnailUrl = if (resource.isImage) {
-                        getImageThumbnailUrl(resource.path)
+                    thumbnailUrl = if (resource.hasFileBrowserThumbnail) {
+                        getResourceThumbnailUrl(resource.path)
                     } else {
                         null
                     },
@@ -581,8 +584,8 @@ private fun FileList(
                 FileItem(
                     resource = resource,
                     onClick = { onFileClick(resource) },
-                    thumbnailUrl = if (resource.isImage) {
-                        getImageThumbnailUrl(resource.path)
+                    thumbnailUrl = if (resource.hasFileBrowserThumbnail) {
+                        getResourceThumbnailUrl(resource.path)
                     } else {
                         null
                     },
@@ -751,7 +754,7 @@ private fun GridResourceVisual(
     val iconColor = getGridResourceIconColor(resource.resourceType)
     val iconBg = getGridResourceIconBg(resource.resourceType)
 
-    if (resource.isImage && thumbnailUrl != null) {
+    if (resource.hasFileBrowserThumbnail && thumbnailUrl != null) {
         var thumbnailLoaded by remember(thumbnailUrl) { mutableStateOf(false) }
 
         Box(
@@ -768,7 +771,7 @@ private fun GridResourceVisual(
             }
             AsyncImage(
                 model = thumbnailUrl,
-                contentDescription = "图片缩略图",
+                contentDescription = "${getGridResourceTypeName(resource.resourceType)}缩略图",
                 modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop,
                 onLoading = { thumbnailLoaded = false },

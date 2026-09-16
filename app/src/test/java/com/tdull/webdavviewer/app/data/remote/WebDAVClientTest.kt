@@ -372,6 +372,36 @@ class WebDAVClientTest {
     }
 
     @Test
+    fun `getResourceThumbnailUrl returns root video thumbnail URL`() {
+        setupClientForUrlGeneration()
+
+        val thumbnailUrl = client.getResourceThumbnailUrl("/video.mp4")
+
+        assertEquals(mockWebServer.url("/webdav/.thumbs/video.mp4.jpg").toString(), thumbnailUrl)
+    }
+
+    @Test
+    fun `getResourceThumbnailUrl returns nested video thumbnail URL`() {
+        setupClientForUrlGeneration()
+
+        val thumbnailUrl = client.getResourceThumbnailUrl("/movies/album/video.mp4")
+
+        assertEquals(mockWebServer.url("/webdav/movies/album/.thumbs/video.mp4.jpg").toString(), thumbnailUrl)
+    }
+
+    @Test
+    fun `getResourceThumbnailUrl encodes video spaces and special characters`() {
+        setupClientForUrlGeneration()
+
+        val thumbnailUrl = client.getResourceThumbnailUrl("/movies/vacation video#1.mp4")
+
+        assertEquals(
+            mockWebServer.url("/webdav/movies/.thumbs/vacation%20video%231.mp4.jpg").toString(),
+            thumbnailUrl
+        )
+    }
+
+    @Test
     fun `getImageThumbnailUrl returns root thumbnail URL`() {
         setupClientForUrlGeneration()
 

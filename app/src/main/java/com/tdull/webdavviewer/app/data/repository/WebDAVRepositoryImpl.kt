@@ -79,6 +79,10 @@ class WebDAVRepositoryImpl @Inject constructor(
         return client.getStreamUrl(path)
     }
 
+    override fun getResourceThumbnailUrl(path: String): String {
+        return client.getResourceThumbnailUrl(path)
+    }
+
     override fun getImageThumbnailUrl(imagePath: String): String {
         return client.getImageThumbnailUrl(imagePath)
     }

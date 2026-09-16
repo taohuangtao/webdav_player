@@ -312,6 +312,16 @@ class FileBrowserViewModelTest {
     }
 
     @Test
+    fun `getResourceThumbnailUrl returns correct URL`() {
+        val expectedUrl = "https://example.com/.thumbs/video.mp4.jpg"
+        whenever(mockWebDavRepository.getResourceThumbnailUrl("/video.mp4")).thenReturn(expectedUrl)
+
+        val result = viewModel.getResourceThumbnailUrl("/video.mp4")
+
+        assertEquals(expectedUrl, result)
+    }
+
+    @Test
     fun `getImageMediumThumbnailUrl returns correct URL`() {
         val expectedUrl = "https://example.com/.thumbs/photo.png.m.jpg"
         whenever(mockWebDavRepository.getImageMediumThumbnailUrl("/photo.png")).thenReturn(expectedUrl)

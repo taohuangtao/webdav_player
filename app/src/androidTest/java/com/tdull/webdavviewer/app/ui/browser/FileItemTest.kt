@@ -142,6 +142,22 @@ class FileItemTest {
     }
 
     @Test
+    fun fileItem_videoWithThumbnailUrl_attemptsToShowThumbnail() {
+        composeTestRule.setContent {
+            WebDAVViewerTheme {
+                FileItem(
+                    resource = testFile,
+                    thumbnailUrl = "https://example.com/.thumbs/video.mp4.jpg",
+                    onClick = {}
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithContentDescription("视频缩略图").assertIsDisplayed()
+    }
+
+    @Test
     fun gridFileItem_showsFileNameOnDefaultIcon() {
         composeTestRule.setContent {
             WebDAVViewerTheme {

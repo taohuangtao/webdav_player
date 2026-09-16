@@ -284,7 +284,7 @@ private fun ResourceLeadingVisual(
     val iconColor = getResourceIconColor(resource.resourceType)
     val iconBg = getResourceIconBg(resource.resourceType)
 
-    if (resource.isImage && thumbnailUrl != null) {
+    if (resource.hasFileBrowserThumbnail && thumbnailUrl != null) {
         var thumbnailLoaded by remember(thumbnailUrl) { mutableStateOf(false) }
 
         Box(
@@ -304,7 +304,7 @@ private fun ResourceLeadingVisual(
 
             AsyncImage(
                 model = thumbnailUrl,
-                contentDescription = "图片缩略图",
+                contentDescription = "${getResourceTypeName(resource.resourceType)}缩略图",
                 modifier = Modifier.matchParentSize(),
                 contentScale = ContentScale.Crop,
                 onLoading = { thumbnailLoaded = false },
@@ -327,6 +327,9 @@ private fun ResourceLeadingVisual(
         }
     }
 }
+
+private val WebDAVResource.hasFileBrowserThumbnail: Boolean
+    get() = isImage || isVideo
 
 /**
  * 默认资源图标
