@@ -311,6 +311,18 @@ private fun ResourceLeadingVisual(
                 onSuccess = { thumbnailLoaded = true },
                 onError = { thumbnailLoaded = false }
             )
+
+            if (thumbnailLoaded && resource.resourceType != ResourceType.IMAGE) {
+                ResourceTypeBadge(
+                    icon = icon,
+                    contentDescription = "${getResourceTypeName(resource.resourceType)}类型标识",
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(1.dp),
+                    badgeSize = 14.dp,
+                    iconSize = 9.dp
+                )
+            }
         }
     } else {
         Box(
@@ -330,6 +342,29 @@ private fun ResourceLeadingVisual(
 
 private val WebDAVResource.hasFileBrowserThumbnail: Boolean
     get() = isImage || isVideo
+
+@Composable
+private fun ResourceTypeBadge(
+    icon: ImageVector,
+    contentDescription: String,
+    modifier: Modifier = Modifier,
+    badgeSize: androidx.compose.ui.unit.Dp,
+    iconSize: androidx.compose.ui.unit.Dp
+) {
+    Box(
+        modifier = modifier
+            .size(badgeSize)
+            .background(Color.Black.copy(alpha = 0.66f), RoundedCornerShape(badgeSize / 2)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(iconSize)
+        )
+    }
+}
 
 /**
  * 默认资源图标

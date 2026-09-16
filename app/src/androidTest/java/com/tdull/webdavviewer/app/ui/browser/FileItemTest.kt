@@ -3,8 +3,8 @@ package com.tdull.webdavviewer.app.ui.browser
 import androidx.compose.foundation.clickable
 import androidx.compose.material3.Text
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -49,6 +49,20 @@ class FileItemTest {
         contentType = null,
         resourceType = ResourceType.DIRECTORY
     )
+
+    private val testImage = WebDAVResource(
+        path = "/photo.png",
+        name = "photo.png",
+        isDirectory = false,
+        size = 2048L,
+        lastModified = 0L,
+        contentType = "image/png",
+        resourceType = ResourceType.IMAGE
+    )
+
+    private val thumbnailDataUrl =
+        "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJ" +
+            "AAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
 
     /**
      * 渲染单个 FileItem，并提供一个最小可用的 moreMenuContent：
@@ -147,7 +161,7 @@ class FileItemTest {
             WebDAVViewerTheme {
                 FileItem(
                     resource = testFile,
-                    thumbnailUrl = "https://example.com/.thumbs/video.mp4.jpg",
+                    thumbnailUrl = thumbnailDataUrl,
                     onClick = {}
                 )
             }
@@ -155,6 +169,41 @@ class FileItemTest {
         composeTestRule.waitForIdle()
 
         composeTestRule.onNodeWithContentDescription("视频缩略图").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("视频类型标识").assertIsDisplayed()
+    }
+
+    @Test
+    fun gridFileItem_videoWithThumbnailUrl_showsTypeBadge() {
+        composeTestRule.setContent {
+            WebDAVViewerTheme {
+                GridFileItem(
+                    resource = testFile,
+                    thumbnailUrl = thumbnailDataUrl,
+                    onClick = {}
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithContentDescription("视频缩略图").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("视频类型标识").assertIsDisplayed()
+    }
+
+    @Test
+    fun gridFileItem_imageWithThumbnailUrl_doesNotShowTypeBadge() {
+        composeTestRule.setContent {
+            WebDAVViewerTheme {
+                GridFileItem(
+                    resource = testImage,
+                    thumbnailUrl = thumbnailDataUrl,
+                    onClick = {}
+                )
+            }
+        }
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithContentDescription("图片缩略图").assertIsDisplayed()
+        composeTestRule.onNodeWithContentDescription("图片类型标识").assertDoesNotExist()
     }
 
     @Test

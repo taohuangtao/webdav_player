@@ -778,6 +778,16 @@ private fun GridResourceVisual(
                 onSuccess = { thumbnailLoaded = true },
                 onError = { thumbnailLoaded = false }
             )
+
+            if (thumbnailLoaded && resource.resourceType != ResourceType.IMAGE) {
+                GridResourceTypeBadge(
+                    icon = icon,
+                    contentDescription = "${getGridResourceTypeName(resource.resourceType)}类型标识",
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                )
+            }
         }
     } else {
         Box(
@@ -791,6 +801,27 @@ private fun GridResourceVisual(
                 tint = iconColor
             )
         }
+    }
+}
+
+@Composable
+private fun GridResourceTypeBadge(
+    icon: ImageVector,
+    contentDescription: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .size(24.dp)
+            .background(Color.Black.copy(alpha = 0.66f), RoundedCornerShape(12.dp)),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = contentDescription,
+            tint = Color.White,
+            modifier = Modifier.size(14.dp)
+        )
     }
 }
 
