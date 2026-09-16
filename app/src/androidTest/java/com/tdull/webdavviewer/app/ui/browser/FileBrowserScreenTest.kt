@@ -3,9 +3,12 @@ package com.tdull.webdavviewer.app.ui.browser
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
@@ -181,11 +184,34 @@ class FileBrowserScreenTest {
             }
         }
 
-        // 点击刷新按钮
-        composeTestRule.onNodeWithContentDescription("刷新").performClick()
+        // 从更多菜单点击刷新
+        composeTestRule.onNodeWithContentDescription("更多操作").performClick()
+        composeTestRule.onNodeWithText("刷新").performClick()
 
         // 验证回调被触发
         assert(refreshClicked)
+    }
+
+    @Test
+    fun clickMoreButton_displaysBrowserMenuActions() {
+        composeTestRule.setContent {
+            WebDAVViewerTheme {
+                TestFileBrowserScreen(
+                    uiState = FileBrowserUiState(isConnected = true, files = emptyList()),
+                    currentPath = "/",
+                    onRefresh = {},
+                    onNavigateBack = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("更多操作").performClick()
+
+        composeTestRule.onNodeWithText("刷新").assertIsDisplayed()
+        composeTestRule.onNodeWithText("新建文件夹").assertIsDisplayed()
+        composeTestRule.onNodeWithText("上传文件").assertIsDisplayed()
+        composeTestRule.onNodeWithText("上传任务").assertIsDisplayed()
+        composeTestRule.onNodeWithText("显示隐藏文件").assertIsDisplayed()
     }
 
     // ========== 返回按钮测试 ==========
@@ -243,6 +269,8 @@ private fun TestFileBrowserScreen(
     onRefresh: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -260,20 +288,62 @@ private fun TestFileBrowserScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(
-                            Icons.Default.ArrowBack,
+                            Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = "返回"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "更多操作"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("刷新") },
+                            leadingIcon = { Icon(Icons.Default.Refresh, contentDescription = null) },
+                            onClick = {
+                                showMenu = false
+                                onRefresh()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("新建文件夹") },
+                            leadingIcon = { Icon(Icons.Default.CreateNewFolder, contentDescription = null) },
+                            onClick = { showMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("上传文件") },
+                            leadingIcon = { Icon(Icons.Default.UploadFile, contentDescription = null) },
+                            onClick = { showMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("上传任务") },
+                            leadingIcon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+                            onClick = { showMenu = false }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(if (uiState.showHidden) "隐藏隐藏文件" else "显示隐藏文件") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (uiState.showHidden) {
+                                        Icons.Default.Visibility
+                                    } else {
+                                        Icons.Default.VisibilityOff
+                                    },
+                                    contentDescription = null
+                                )
+                            },
+                            onClick = { showMenu = false }
                         )
                     }
                 }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(onClick = onRefresh) {
-                Icon(
-                    Icons.Default.Refresh,
-                    contentDescription = "刷新"
-                )
-            }
         }
     ) { paddingValues ->
         Column(
@@ -366,7 +436,7 @@ private fun TestFileBrowserScreen(
                                             file.isDirectory -> Icons.Default.Folder
                                             file.isVideo -> Icons.Default.PlayArrow
                                             file.isImage -> Icons.Default.Image
-                                            else -> Icons.Default.InsertDriveFile
+                                            else -> Icons.AutoMirrored.Filled.InsertDriveFile
                                         },
                                         contentDescription = null
                                     )

@@ -2,13 +2,15 @@ package com.tdull.webdavviewer.app
 
 import android.app.Application
 import android.util.Log
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import dagger.hilt.android.HiltAndroidApp
 import javax.inject.Inject
 
 @HiltAndroidApp
-class WebDavApplication : Application(), ImageLoaderFactory {
+class WebDavApplication : Application(), ImageLoaderFactory, Configuration.Provider {
     
     companion object {
         private const val TAG = "WebDavApplication"
@@ -16,6 +18,9 @@ class WebDavApplication : Application(), ImageLoaderFactory {
 
     @Inject
     lateinit var imageLoader: ImageLoader
+
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
 
     override fun onCreate() {
         super.onCreate()
@@ -31,6 +36,11 @@ class WebDavApplication : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
         return imageLoader
     }
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .build()
     
     /**
      * 设置全局未捕获异常处理器

@@ -1,5 +1,12 @@
 package com.tdull.webdavviewer.app.ui.browser
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Log
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -10,7 +17,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,10 +36,12 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.VisibilityOff
@@ -51,20 +59,20 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import android.util.Log
-import android.widget.Toast
-import android.content.Context
 import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import com.tdull.webdavviewer.app.data.model.BrowserLayoutMode
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.ResourceType
+import com.tdull.webdavviewer.app.data.model.UploadConflictPolicy
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.ui.components.MenuItemRow
 import com.tdull.webdavviewer.app.ui.components.MenuPopupContainer
 import com.tdull.webdavviewer.app.ui.viewer.ImageViewerItem
 import com.tdull.webdavviewer.app.viewmodel.FileBrowserViewModel
+import com.tdull.webdavviewer.app.viewmodel.PendingUploadBatch
 
 // ================= 文件浏览器设计稿配色（filebrowser_redesign.html） =================
 private val SettingsBg = Color(0xFFF4F6FB)      // 页面背景
@@ -72,7 +80,6 @@ private val CardWhite = Color(0xFFFFFFFF)        // 卡片底色
 private val TextPrimary = Color(0xFF111827)      // 主文字
 private val TextSecondary = Color(0xFF6B7280)    // 次级文字
 private val TextMuted = Color(0xFF9CA3AF)        // 弱化文字
-private val IndigoFab = Color(0xFF6366F1)        // FAB 主色
 private val IndigoPrimary = Color(0xFF4F46E5)    // indigo 主色
 private val IndigoLight = Color(0xFFEEF2FF)      // indigo 浅底
 private val DeleteRed = Color(0xFFF43F5E)        // 删除红
@@ -88,6 +95,7 @@ fun FileBrowserScreen(
     serverId: String? = null,
     onVideoClick: (String) -> Unit = {},
     onImageClick: (List<ImageViewerItem>, Int) -> Unit = { _, _ -> },
+    onNavigateToUploads: () -> Unit = {},
     onNavigateBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -108,6 +116,25 @@ fun FileBrowserScreen(
     var deleteTarget by remember { mutableStateOf<WebDAVResource?>(null) }
     // 新建文件夹对话框
     var showCreateDirectoryDialog by remember { mutableStateOf(false) }
+
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+        onResult = {}
+    )
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenMultipleDocuments(),
+        onResult = { uris ->
+            viewModel.prepareUploads(uris)
+        }
+    )
+
+    fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
     
     // 操作成功/失败提示
     LaunchedEffect(uiState.operationSuccess) {
@@ -182,61 +209,19 @@ fun FileBrowserScreen(
                         )
                     }
                     Spacer(modifier = Modifier.width(8.dp))
-                    // 新建文件夹按钮（indigo 浅底圆角方块）
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(IndigoLight, RoundedCornerShape(18.dp))
-                            .clickable(
-                                enabled = uiState.isConnected && !uiState.isOperationLoading,
-                                onClick = { showCreateDirectoryDialog = true }
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.CreateNewFolder,
-                            contentDescription = "新建文件夹",
-                            tint = if (uiState.isConnected) IndigoPrimary else TextMuted,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    // 显示/隐藏文件切换按钮（indigo 浅底圆角方块）
-                    Box(
-                        modifier = Modifier
-                            .size(36.dp)
-                            .background(IndigoLight, RoundedCornerShape(18.dp))
-                            .clickable { viewModel.toggleShowHidden() },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (uiState.showHidden) {
-                            Icon(
-                                imageVector = Icons.Default.Visibility,
-                                contentDescription = "隐藏隐藏文件",
-                                tint = IndigoPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Outlined.VisibilityOff,
-                                contentDescription = "显示隐藏文件",
-                                tint = IndigoPrimary,
-                                modifier = Modifier.size(18.dp)
-                            )
-                        }
-                    }
+                    BrowserMoreMenu(
+                        canWrite = uiState.isConnected && !uiState.isOperationLoading && !uiState.isPreparingUpload,
+                        showHidden = uiState.showHidden,
+                        onRefresh = { viewModel.refresh() },
+                        onCreateDirectory = { showCreateDirectoryDialog = true },
+                        onUploadFiles = {
+                            requestNotificationPermissionIfNeeded()
+                            filePickerLauncher.launch(arrayOf("*/*"))
+                        },
+                        onNavigateToUploads = onNavigateToUploads,
+                        onToggleShowHidden = { viewModel.toggleShowHidden() }
+                    )
                 }
-            }
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { viewModel.refresh() },
-                containerColor = IndigoFab,
-                contentColor = Color.White,
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = "刷新")
             }
         }
     ) { paddingValues ->
@@ -245,6 +230,13 @@ fun FileBrowserScreen(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
+            if (uiState.isPreparingUpload) {
+                LinearProgressIndicator(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = IndigoPrimary,
+                    trackColor = IndigoLight
+                )
+            }
             // 面包屑导航
             if (uiState.isConnected && currentPath.isNotEmpty()) {
                 Breadcrumb(
@@ -363,6 +355,16 @@ fun FileBrowserScreen(
             }
         )
     }
+
+    uiState.pendingUploadBatch?.let { batch ->
+        UploadConfirmDialog(
+            batch = batch,
+            isLoading = uiState.isOperationLoading,
+            onDismiss = { viewModel.dismissPendingUploads() },
+            onSkipConflicts = { viewModel.enqueuePendingUploads(UploadConflictPolicy.SKIP) },
+            onOverwriteConflicts = { viewModel.enqueuePendingUploads(UploadConflictPolicy.OVERWRITE) }
+        )
+    }
     
     // 移动对话框
     moveTarget?.let { resource ->
@@ -392,6 +394,94 @@ fun FileBrowserScreen(
                 deleteTarget = null
             }
         )
+    }
+}
+
+@Composable
+private fun BrowserMoreMenu(
+    canWrite: Boolean,
+    showHidden: Boolean,
+    onRefresh: () -> Unit,
+    onCreateDirectory: () -> Unit,
+    onUploadFiles: () -> Unit,
+    onNavigateToUploads: () -> Unit,
+    onToggleShowHidden: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        Box(
+            modifier = Modifier
+                .size(36.dp)
+                .background(IndigoLight, RoundedCornerShape(18.dp))
+                .clickable { expanded = true },
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "更多操作",
+                tint = IndigoPrimary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        MenuPopupContainer(
+            expanded = expanded,
+            onDismiss = { expanded = false }
+        ) {
+            MenuItemRow(
+                icon = Icons.Default.Refresh,
+                iconTint = IndigoPrimary,
+                text = "刷新",
+                textColor = TextPrimary,
+                onClick = {
+                    expanded = false
+                    onRefresh()
+                }
+            )
+            MenuItemRow(
+                icon = Icons.Default.CreateNewFolder,
+                iconTint = IndigoPrimary,
+                text = "新建文件夹",
+                textColor = TextPrimary,
+                enabled = canWrite,
+                onClick = {
+                    expanded = false
+                    onCreateDirectory()
+                }
+            )
+            MenuItemRow(
+                icon = Icons.Default.UploadFile,
+                iconTint = IndigoPrimary,
+                text = "上传文件",
+                textColor = TextPrimary,
+                enabled = canWrite,
+                onClick = {
+                    expanded = false
+                    onUploadFiles()
+                }
+            )
+            MenuItemRow(
+                icon = Icons.AutoMirrored.Filled.List,
+                iconTint = IndigoPrimary,
+                text = "上传任务",
+                textColor = TextPrimary,
+                onClick = {
+                    expanded = false
+                    onNavigateToUploads()
+                }
+            )
+            MenuItemRow(
+                icon = if (showHidden) Icons.Default.Visibility else Icons.Outlined.VisibilityOff,
+                iconTint = IndigoPrimary,
+                text = if (showHidden) "隐藏隐藏文件" else "显示隐藏文件",
+                textColor = TextPrimary,
+                onClick = {
+                    expanded = false
+                    onToggleShowHidden()
+                }
+            )
+        }
     }
 }
 
@@ -1219,6 +1309,127 @@ private fun CreateDirectoryDialog(
             }
         }
     )
+}
+
+/**
+ * 上传确认对话框。
+ */
+@Composable
+private fun UploadConfirmDialog(
+    batch: PendingUploadBatch,
+    isLoading: Boolean,
+    onDismiss: () -> Unit,
+    onSkipConflicts: () -> Unit,
+    onOverwriteConflicts: () -> Unit
+) {
+    val hasConflicts = batch.conflictFileNames.isNotEmpty()
+    val uploadableFiles = batch.files.filterNot { it.fileName in batch.blockedFileNames }
+
+    AlertDialog(
+        onDismissRequest = { if (!isLoading) onDismiss() },
+        title = { Text("上传文件") },
+        text = {
+            Column {
+                Text(
+                    text = "目标位置：${batch.serverConfig.name}${batch.targetDirectory}",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = "将上传 ${uploadableFiles.size} 个文件",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+                UploadNamePreview(names = uploadableFiles.map { it.fileName })
+
+                if (batch.duplicateFileNames.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "同批次重名文件只保留第一个：${batch.duplicateFileNames.take(3).joinToString("、")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+
+                if (batch.blockedFileNames.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "以下文件与远端文件夹重名，无法上传：${batch.blockedFileNames.take(3).joinToString("、")}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = DeleteRed
+                    )
+                }
+
+                if (hasConflicts) {
+                    Spacer(modifier = Modifier.height(10.dp))
+                    Text(
+                        text = "发现 ${batch.conflictFileNames.size} 个远端同名文件",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = DeleteRed,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    UploadNamePreview(names = batch.conflictFileNames.toList())
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = if (hasConflicts) onSkipConflicts else onSkipConflicts,
+                enabled = !isLoading && uploadableFiles.isNotEmpty()
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        strokeWidth = 2.dp,
+                        color = Color.White
+                    )
+                } else {
+                    Text(if (hasConflicts) "跳过同名" else "上传")
+                }
+            }
+        },
+        dismissButton = {
+            Row {
+                if (hasConflicts) {
+                    TextButton(
+                        onClick = onOverwriteConflicts,
+                        enabled = !isLoading
+                    ) {
+                        Text("覆盖同名")
+                    }
+                }
+                TextButton(onClick = onDismiss, enabled = !isLoading) {
+                    Text("取消")
+                }
+            }
+        }
+    )
+}
+
+@Composable
+private fun UploadNamePreview(names: List<String>) {
+    if (names.isEmpty()) return
+    Spacer(modifier = Modifier.height(6.dp))
+    Column {
+        names.take(5).forEach { name ->
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (names.size > 5) {
+            Text(
+                text = "还有 ${names.size - 5} 个文件",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMuted
+            )
+        }
+    }
 }
 
 /**

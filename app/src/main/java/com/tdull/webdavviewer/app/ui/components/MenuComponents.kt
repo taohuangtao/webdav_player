@@ -91,20 +91,24 @@ fun MenuItemRow(
     iconTint: Color,
     text: String,
     textColor: Color,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
+    val resolvedIconTint = if (enabled) iconTint else iconTint.copy(alpha = 0.38f)
+    val resolvedTextColor = if (enabled) textColor else textColor.copy(alpha = 0.38f)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(44.dp)
-            .clickable(onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = iconTint,
+            tint = resolvedIconTint,
             modifier = Modifier.size(16.dp)
         )
         Spacer(modifier = Modifier.width(12.dp))
@@ -112,7 +116,7 @@ fun MenuItemRow(
             text = text,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
-            color = textColor
+            color = resolvedTextColor
         )
     }
 }

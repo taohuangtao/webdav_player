@@ -7,12 +7,14 @@ import com.tdull.webdavviewer.app.data.model.BrowserLayoutSettings
 import com.tdull.webdavviewer.app.data.model.DownloadItem
 import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.data.model.ServerConfig
+import com.tdull.webdavviewer.app.data.model.UploadTask
 import com.tdull.webdavviewer.app.data.model.WebDAVException
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.data.repository.BrowserLayoutSettingsRepository
 import com.tdull.webdavviewer.app.data.repository.ConfigRepository
 import com.tdull.webdavviewer.app.data.repository.DownloadsRepository
 import com.tdull.webdavviewer.app.data.repository.FavoritesRepository
+import com.tdull.webdavviewer.app.data.repository.UploadsRepository
 import com.tdull.webdavviewer.app.data.repository.WebDAVRepository
 import com.tdull.webdavviewer.app.service.DownloadManager
 import com.tdull.webdavviewer.app.util.NetworkMonitor
@@ -63,6 +65,9 @@ class FileBrowserViewModelTest {
     private lateinit var mockDownloadsRepository: DownloadsRepository
 
     @Mock
+    private lateinit var mockUploadsRepository: UploadsRepository
+
+    @Mock
     private lateinit var mockDownloadManager: DownloadManager
 
     private lateinit var viewModel: FileBrowserViewModel
@@ -82,6 +87,7 @@ class FileBrowserViewModelTest {
         whenever(mockNetworkMonitor.isNetworkAvailable()).thenReturn(true)
         whenever(mockFavoritesRepository.favorites).thenReturn(flowOf(emptyList<FavoriteItem>()))
         whenever(mockDownloadsRepository.downloads).thenReturn(flowOf(emptyList<DownloadItem>()))
+        whenever(mockUploadsRepository.uploads).thenReturn(flowOf(emptyList<UploadTask>()))
         whenever(mockDownloadManager.downloadProgress).thenReturn(MutableStateFlow(emptyMap()))
         layoutSettingsFlow = MutableStateFlow(BrowserLayoutSettings())
         whenever(mockBrowserLayoutSettingsRepository.getLayoutSettings()).thenReturn(layoutSettingsFlow)
@@ -98,6 +104,7 @@ class FileBrowserViewModelTest {
                 )
                 Unit
             }
+            whenever(mockUploadsRepository.rescheduleQueuedUploads()).thenReturn(Result.success(Unit))
         }
 
         // ErrorHandler 依赖 application.getString 获取文案，mock 默认返回 null 会导致 error 为 null 或抛 NPE
@@ -112,6 +119,7 @@ class FileBrowserViewModelTest {
             networkMonitor = mockNetworkMonitor,
             favoritesRepository = mockFavoritesRepository,
             downloadsRepository = mockDownloadsRepository,
+            uploadsRepository = mockUploadsRepository,
             downloadManager = mockDownloadManager
         )
     }

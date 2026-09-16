@@ -44,7 +44,7 @@ class SettingsScreenTest {
 
         // 验证空状态提示显示
         composeTestRule.onNodeWithText("暂无服务器配置").assertIsDisplayed()
-        composeTestRule.onNodeWithText("点击右下角按钮添加服务器").assertIsDisplayed()
+        composeTestRule.onNodeWithText("点击右上角按钮添加服务器").assertIsDisplayed()
     }
 
     // ========== 服务器列表测试 ==========
@@ -172,18 +172,16 @@ private fun TestSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("设置") }
+                title = { Text("设置") },
+                actions = {
+                    IconButton(onClick = onAddServerClick) {
+                        Icon(
+                            Icons.Default.Add,
+                            contentDescription = "添加服务器"
+                        )
+                    }
+                }
             )
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = onAddServerClick
-            ) {
-                Icon(
-                    Icons.Default.Add,
-                    contentDescription = "添加服务器"
-                )
-            }
         }
     ) { paddingValues ->
         Column(
@@ -222,7 +220,7 @@ private fun TestSettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "点击右下角按钮添加服务器",
+                            text = "点击右上角按钮添加服务器",
                             color = MaterialTheme.colorScheme.outline
                         )
                     }

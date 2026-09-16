@@ -20,6 +20,7 @@ import okhttp3.Cache
 import okhttp3.Credentials
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import okhttp3.Protocol
 import okhttp3.logging.HttpLoggingInterceptor
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -51,6 +52,7 @@ object WebDAVModule {
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
+            .protocols(listOf(Protocol.HTTP_1_1))
             // 重试机制
             .retryOnConnectionFailure(true)
             // 缓存配置

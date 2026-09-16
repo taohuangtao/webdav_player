@@ -15,6 +15,7 @@ import com.tdull.webdavviewer.app.ui.viewer.ImageViewerScreen
 import com.tdull.webdavviewer.app.ui.viewer.ImageViewerItem
 import com.tdull.webdavviewer.app.ui.favorites.FavoritesScreen
 import com.tdull.webdavviewer.app.ui.downloads.DownloadsScreen
+import com.tdull.webdavviewer.app.ui.uploads.UploadsScreen
 import java.net.URLDecoder
 
 private const val IMAGE_VIEWER_URLS_KEY = "imageViewerUrls"
@@ -47,6 +48,9 @@ fun AppNavGraph(
                 },
                 onNavigateToDownloads = {
                     navController.navigate(Screen.Downloads.route)
+                },
+                onNavigateToUploads = {
+                    navController.navigate(Screen.Uploads.route)
                 }
             )
         }
@@ -85,6 +89,9 @@ fun AppNavGraph(
                             )
                         )
                     }
+                },
+                onNavigateToUploads = {
+                    navController.navigate(Screen.Uploads.route)
                 },
                 onNavigateBack = {
                     navController.popBackStack()
@@ -194,6 +201,15 @@ fun AppNavGraph(
                 onVideoClick = { url ->
                     navController.navigate(Screen.VideoPlayer.createRoute(url))
                 },
+                onNavigateBack = {
+                    navController.popBackStack()
+                }
+            )
+        }
+
+        // 上传任务页面
+        composable(route = Screen.Uploads.route) {
+            UploadsScreen(
                 onNavigateBack = {
                     navController.popBackStack()
                 }

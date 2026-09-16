@@ -54,4 +54,9 @@ sealed class Screen(val route: String) {
      * 下载列表页面
      */
     object Downloads : Screen("downloads")
+
+    /**
+     * 上传任务页面
+     */
+    object Uploads : Screen("uploads")
 }

@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -20,6 +19,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -43,7 +43,6 @@ private val CardWhite = Color(0xFFFFFFFF)        // 卡片底色
 private val TextPrimary = Color(0xFF111827)      // 主文字
 private val TextSecondary = Color(0xFF6B7280)    // 次级文字
 private val TextMuted = Color(0xFF9CA3AF)        // 弱化文字
-private val IndigoFab = Color(0xFF6366F1)        // FAB 主色
 private val IndigoPrimary = Color(0xFF4F46E5)    // 图标/标签主色
 private val IndigoLight = Color(0xFFEEF2FF)      // indigo 浅底
 private val RosePrimary = Color(0xFFF43F5E)      // 收藏红
@@ -58,7 +57,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onNavigateToBrowser: (String) -> Unit = {},
     onNavigateToFavorites: () -> Unit = {},
-    onNavigateToDownloads: () -> Unit = {}
+    onNavigateToDownloads: () -> Unit = {},
+    onNavigateToUploads: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -76,27 +76,33 @@ fun SettingsScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(48.dp)
-                        .padding(horizontal = 20.dp),
+                        .padding(start = 20.dp, end = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = "设置",
                         color = TextPrimary,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 19.sp
+                        fontSize = 19.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(IndigoLight, RoundedCornerShape(18.dp))
+                            .clickable { viewModel.showAddDialog() },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "添加服务器",
+                            tint = IndigoPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
-            }
-        },
-        floatingActionButton = {
-            FloatingActionButton(
-                onClick = { viewModel.showAddDialog() },
-                containerColor = IndigoFab,
-                contentColor = Color.White,
-                shape = CircleShape,
-                elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 6.dp)
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "添加服务器")
             }
         }
     ) { paddingValues ->
@@ -132,6 +138,15 @@ fun SettingsScreen(
                 onClick = onNavigateToDownloads
             )
 
+            // 上传任务入口
+            EntryCard(
+                icon = Icons.Default.UploadFile,
+                iconTint = IndigoPrimary,
+                iconBg = IndigoLight,
+                title = "上传任务",
+                onClick = onNavigateToUploads
+            )
+
             Spacer(modifier = Modifier.height(8.dp))
 
             // 服务器列表
@@ -160,7 +175,7 @@ fun SettingsScreen(
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "点击右下角按钮添加服务器",
+                            text = "点击右上角按钮添加服务器",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextMuted,
                             textAlign = TextAlign.Center

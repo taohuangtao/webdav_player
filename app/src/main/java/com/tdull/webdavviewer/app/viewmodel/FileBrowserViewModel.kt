@@ -1,6 +1,9 @@
 package com.tdull.webdavviewer.app.viewmodel
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.tdull.webdavviewer.app.data.model.BrowserLayoutMode
@@ -9,12 +12,16 @@ import com.tdull.webdavviewer.app.data.model.DownloadItem
 import com.tdull.webdavviewer.app.data.model.DownloadState
 import com.tdull.webdavviewer.app.data.model.FavoriteItem
 import com.tdull.webdavviewer.app.data.model.ServerConfig
+import com.tdull.webdavviewer.app.data.model.UploadConflictPolicy
+import com.tdull.webdavviewer.app.data.model.UploadFileCandidate
+import com.tdull.webdavviewer.app.data.model.UploadStatus
 import com.tdull.webdavviewer.app.data.model.WebDAVException
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
 import com.tdull.webdavviewer.app.data.repository.BrowserLayoutSettingsRepository
 import com.tdull.webdavviewer.app.data.repository.ConfigRepository
 import com.tdull.webdavviewer.app.data.repository.FavoritesRepository
 import com.tdull.webdavviewer.app.data.repository.DownloadsRepository
+import com.tdull.webdavviewer.app.data.repository.UploadsRepository
 import com.tdull.webdavviewer.app.data.repository.WebDAVRepository
 import com.tdull.webdavviewer.app.service.DownloadManager
 import com.tdull.webdavviewer.app.service.DownloadProgress
@@ -48,8 +55,22 @@ data class FileBrowserUiState(
     val operationSuccess: String? = null,
     val showHidden: Boolean = false,
     val layoutMode: BrowserLayoutMode = BrowserLayoutMode.GRID,
-    val gridColumns: Int = BrowserLayoutSettings.DEFAULT_GRID_COLUMNS
+    val gridColumns: Int = BrowserLayoutSettings.DEFAULT_GRID_COLUMNS,
+    val isPreparingUpload: Boolean = false,
+    val pendingUploadBatch: PendingUploadBatch? = null
 )
+
+data class PendingUploadBatch(
+    val serverConfig: ServerConfig,
+    val targetDirectory: String,
+    val files: List<UploadFileCandidate>,
+    val conflictFileNames: Set<String>,
+    val blockedFileNames: Set<String>,
+    val duplicateFileNames: Set<String>
+) {
+    val uploadableCount: Int
+        get() = files.size - blockedFileNames.size
+}
 
 /**
  * 文件浏览器ViewModel
@@ -63,6 +84,7 @@ class FileBrowserViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor,
     private val favoritesRepository: FavoritesRepository,
     private val downloadsRepository: DownloadsRepository,
+    private val uploadsRepository: UploadsRepository,
     private val downloadManager: DownloadManager
 ) : ViewModel() {
 
@@ -77,6 +99,8 @@ class FileBrowserViewModel @Inject constructor(
 
     // 当前服务器配置
     private var currentServerConfig: ServerConfig? = null
+
+    private val observedCompletedUploadIds = mutableSetOf<String>()
 
     // 视频预览图缓存：Map<视频路径, 预览图URL列表>
     private val _videoPreviews = MutableStateFlow<Map<String, List<String>>>(emptyMap())
@@ -135,6 +159,19 @@ class FileBrowserViewModel @Inject constructor(
                         }
                     }
                     updated
+                }
+            }
+        }
+
+        // 上传完成后，如果浏览器正在显示同一个服务器/目录，自动刷新当前列表。
+        viewModelScope.launch {
+            uploadsRepository.uploads.collect { uploads ->
+                val completedTasks = uploads.filter { it.status == UploadStatus.COMPLETED }
+                val newlyCompleted = completedTasks.filter { observedCompletedUploadIds.add(it.id) }
+                val currentServerId = currentServerConfig?.id
+                val currentDirectory = normalizeDirectoryPath(_currentPath.value)
+                if (newlyCompleted.any { it.serverId == currentServerId && it.targetDirectory == currentDirectory }) {
+                    refresh()
                 }
             }
         }
@@ -609,6 +646,195 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     /**
+     * 准备一批系统文件选择器返回的文件。
+     */
+    fun prepareUploads(uris: List<Uri>) {
+        val serverConfig = currentServerConfig
+        if (serverConfig == null || !_uiState.value.isConnected) {
+            _uiState.update { it.copy(operationError = "请先连接服务器后再上传") }
+            return
+        }
+
+        if (uris.isEmpty()) {
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isPreparingUpload = true,
+                    operationError = null,
+                    operationSuccess = null,
+                    pendingUploadBatch = null
+                )
+            }
+
+            val candidates = uris
+                .distinctBy { it.toString() }
+                .mapNotNull { uri ->
+                    takePersistableReadPermission(uri)
+                    readUploadCandidate(uri)
+                }
+
+            if (candidates.isEmpty()) {
+                _uiState.update {
+                    it.copy(
+                        isPreparingUpload = false,
+                        operationError = "无法读取所选文件"
+                    )
+                }
+                return@launch
+            }
+
+            val duplicateFileNames = candidates
+                .groupBy { it.fileName }
+                .filterValues { it.size > 1 }
+                .keys
+                .toSet()
+            val dedupedCandidates = candidates
+                .groupBy { it.fileName }
+                .map { it.value.first() }
+
+            val remoteFilesResult = webDavRepository.listFiles(_currentPath.value, showHidden = true)
+            remoteFilesResult.fold(
+                onSuccess = { remoteFiles ->
+                    val remoteFileNames = remoteFiles
+                        .filterNot { it.isDirectory }
+                        .map { it.name }
+                        .toSet()
+                    val remoteDirectoryNames = remoteFiles
+                        .filter { it.isDirectory }
+                        .map { it.name }
+                        .toSet()
+
+                    val blockedFileNames = dedupedCandidates
+                        .filter { it.fileName in remoteDirectoryNames }
+                        .map { it.fileName }
+                        .toSet()
+                    val uploadableCandidates = dedupedCandidates
+                        .filterNot { it.fileName in blockedFileNames }
+                    val conflictFileNames = uploadableCandidates
+                        .filter { it.fileName in remoteFileNames }
+                        .map { it.fileName }
+                        .toSet()
+
+                    if (uploadableCandidates.isEmpty()) {
+                        _uiState.update {
+                            it.copy(
+                                isPreparingUpload = false,
+                                operationError = "所选文件均与远端文件夹重名，无法上传"
+                            )
+                        }
+                        return@fold
+                    }
+
+                    _uiState.update {
+                        it.copy(
+                            isPreparingUpload = false,
+                            pendingUploadBatch = PendingUploadBatch(
+                                serverConfig = serverConfig,
+                                targetDirectory = normalizeDirectoryPath(_currentPath.value),
+                                files = dedupedCandidates,
+                                conflictFileNames = conflictFileNames,
+                                blockedFileNames = blockedFileNames,
+                                duplicateFileNames = duplicateFileNames
+                            )
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    val errorInfo = ErrorHandler.getErrorInfo(error, application)
+                    _uiState.update {
+                        it.copy(
+                            isPreparingUpload = false,
+                            operationError = "检查远端同名文件失败：${errorInfo.message}"
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    /**
+     * 入队当前等待确认的上传批次。
+     */
+    fun enqueuePendingUploads(conflictPolicy: UploadConflictPolicy) {
+        val batch = _uiState.value.pendingUploadBatch ?: return
+
+        val filesToUpload = batch.files
+            .filterNot { it.fileName in batch.blockedFileNames }
+            .filterNot { it.fileName in batch.conflictFileNames && conflictPolicy == UploadConflictPolicy.SKIP }
+
+        if (filesToUpload.isEmpty()) {
+            _uiState.update {
+                it.copy(
+                    pendingUploadBatch = null,
+                    operationSuccess = "已跳过所有同名文件",
+                    operationError = null
+                )
+            }
+            return
+        }
+
+        val conflictPolicies = filesToUpload.associate { candidate ->
+            candidate.fileName to if (candidate.fileName in batch.conflictFileNames) {
+                conflictPolicy
+            } else {
+                UploadConflictPolicy.SKIP
+            }
+        }
+
+        viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    isOperationLoading = true,
+                    operationError = null,
+                    operationSuccess = null
+                )
+            }
+
+            val result = uploadsRepository.enqueueUploads(
+                files = filesToUpload,
+                serverConfig = batch.serverConfig,
+                targetDirectory = batch.targetDirectory,
+                conflictPolicies = conflictPolicies
+            )
+
+            result.fold(
+                onSuccess = { tasks ->
+                    val skipped = batch.uploadableCount - tasks.size
+                    val message = if (skipped > 0) {
+                        "已加入上传队列 ${tasks.size} 个文件，跳过 $skipped 个同名文件"
+                    } else {
+                        "已加入上传队列 ${tasks.size} 个文件"
+                    }
+                    _uiState.update {
+                        it.copy(
+                            isOperationLoading = false,
+                            pendingUploadBatch = null,
+                            operationSuccess = message,
+                            operationError = null
+                        )
+                    }
+                },
+                onFailure = { error ->
+                    _uiState.update {
+                        it.copy(
+                            isOperationLoading = false,
+                            operationError = error.message ?: "创建上传任务失败",
+                            operationSuccess = null
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    fun dismissPendingUploads() {
+        _uiState.update { it.copy(pendingUploadBatch = null) }
+    }
+
+    /**
      * 清除操作状态（成功/错误提示）
      */
     fun clearOperationFeedback() {
@@ -663,5 +889,52 @@ class FileBrowserViewModel @Inject constructor(
                 }
             }
         )
+    }
+
+    private fun takePersistableReadPermission(uri: Uri) {
+        runCatching {
+            application.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+        }
+    }
+
+    private fun readUploadCandidate(uri: Uri): UploadFileCandidate? {
+        val resolver = application.contentResolver
+        var displayName: String? = null
+        var size = -1L
+
+        resolver.query(uri, null, null, null, null)?.use { cursor ->
+            val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (cursor.moveToFirst()) {
+                if (nameIndex >= 0) {
+                    displayName = cursor.getString(nameIndex)
+                }
+                if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) {
+                    size = cursor.getLong(sizeIndex)
+                }
+            }
+        }
+
+        val name = displayName
+            ?.takeIf { it.isNotBlank() }
+            ?: uri.lastPathSegment
+                ?.substringAfterLast('/')
+                ?.takeIf { it.isNotBlank() }
+            ?: return null
+
+        return UploadFileCandidate(
+            uriString = uri.toString(),
+            fileName = name.replace("/", "_").replace("\\", "_"),
+            mimeType = resolver.getType(uri),
+            fileSize = size
+        )
+    }
+
+    private fun normalizeDirectoryPath(path: String): String {
+        val normalized = path.ifBlank { "/" }.let { if (it.startsWith("/")) it else "/$it" }
+        return if (normalized == "/") "/" else "${normalized.trimEnd('/')}/"
     }
 }
