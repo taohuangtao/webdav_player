@@ -4,9 +4,13 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.*
@@ -142,6 +146,62 @@ class SettingsScreenTest {
         assert(addClicked)
     }
 
+    @Test
+    fun clickMoreEntryButton_displaysNavigationActions() {
+        composeTestRule.setContent {
+            WebDAVViewerTheme {
+                TestSettingsScreen(
+                    uiState = SettingsUiState(),
+                    onAddServerClick = {}
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithText("我的收藏").assertDoesNotExist()
+        composeTestRule.onNodeWithText("已下载").assertDoesNotExist()
+        composeTestRule.onNodeWithText("上传任务").assertDoesNotExist()
+
+        composeTestRule.onNodeWithContentDescription("更多入口").performClick()
+
+        composeTestRule.onNodeWithText("我的收藏").assertIsDisplayed()
+        composeTestRule.onNodeWithText("已下载").assertIsDisplayed()
+        composeTestRule.onNodeWithText("上传任务").assertIsDisplayed()
+    }
+
+    @Test
+    fun clickMoreEntryItems_triggersCallbacksAndClosesMenu() {
+        var favoritesClicked = false
+        var downloadsClicked = false
+        var uploadsClicked = false
+
+        composeTestRule.setContent {
+            WebDAVViewerTheme {
+                TestSettingsScreen(
+                    uiState = SettingsUiState(),
+                    onAddServerClick = {},
+                    onNavigateToFavorites = { favoritesClicked = true },
+                    onNavigateToDownloads = { downloadsClicked = true },
+                    onNavigateToUploads = { uploadsClicked = true }
+                )
+            }
+        }
+
+        composeTestRule.onNodeWithContentDescription("更多入口").performClick()
+        composeTestRule.onNodeWithText("我的收藏").performClick()
+        assert(favoritesClicked)
+        composeTestRule.onNodeWithText("我的收藏").assertDoesNotExist()
+
+        composeTestRule.onNodeWithContentDescription("更多入口").performClick()
+        composeTestRule.onNodeWithText("已下载").performClick()
+        assert(downloadsClicked)
+        composeTestRule.onNodeWithText("已下载").assertDoesNotExist()
+
+        composeTestRule.onNodeWithContentDescription("更多入口").performClick()
+        composeTestRule.onNodeWithText("上传任务").performClick()
+        assert(uploadsClicked)
+        composeTestRule.onNodeWithText("上传任务").assertDoesNotExist()
+    }
+
     // ========== 加载状态测试 ==========
 
     @Test
@@ -167,8 +227,13 @@ class SettingsScreenTest {
 @Composable
 private fun TestSettingsScreen(
     uiState: SettingsUiState,
-    onAddServerClick: () -> Unit
+    onAddServerClick: () -> Unit,
+    onNavigateToFavorites: () -> Unit = {},
+    onNavigateToDownloads: () -> Unit = {},
+    onNavigateToUploads: () -> Unit = {}
 ) {
+    var showEntryMenu by remember { mutableStateOf(false) }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -178,6 +243,41 @@ private fun TestSettingsScreen(
                         Icon(
                             Icons.Default.Add,
                             contentDescription = "添加服务器"
+                        )
+                    }
+                    IconButton(onClick = { showEntryMenu = true }) {
+                        Icon(
+                            Icons.Default.MoreVert,
+                            contentDescription = "更多入口"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showEntryMenu,
+                        onDismissRequest = { showEntryMenu = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("我的收藏") },
+                            leadingIcon = { Icon(Icons.Default.Favorite, contentDescription = null) },
+                            onClick = {
+                                showEntryMenu = false
+                                onNavigateToFavorites()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("已下载") },
+                            leadingIcon = { Icon(Icons.Default.Download, contentDescription = null) },
+                            onClick = {
+                                showEntryMenu = false
+                                onNavigateToDownloads()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text("上传任务") },
+                            leadingIcon = { Icon(Icons.Default.UploadFile, contentDescription = null) },
+                            onClick = {
+                                showEntryMenu = false
+                                onNavigateToUploads()
+                            }
                         )
                     }
                 }

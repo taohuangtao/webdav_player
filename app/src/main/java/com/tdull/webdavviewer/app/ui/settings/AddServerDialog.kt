@@ -198,7 +198,7 @@ fun AddServerDialog(
                                     name = name.trim(),
                                     url = url.trim(),
                                     username = username.trim(),
-                                    password = password
+                                    password = password.trim()
                                 )
                                 onTestConnection(config)
                             }
@@ -224,7 +224,7 @@ fun AddServerDialog(
                                     name = name.trim(),
                                     url = url.trim(),
                                     username = username.trim(),
-                                    password = password
+                                    password = password.trim()
                                 )
                                 onSave(config)
                             }

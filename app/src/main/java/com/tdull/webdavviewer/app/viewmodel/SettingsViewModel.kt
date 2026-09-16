@@ -59,6 +59,10 @@ class SettingsViewModel @Inject constructor(
     private val networkMonitor: NetworkMonitor
 ) : ViewModel() {
 
+    companion object {
+        private const val TAG = "SettingsViewModel"
+    }
+
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
 
@@ -271,12 +275,12 @@ class SettingsViewModel @Inject constructor(
      * 测试服务器连接
      */
     fun testConnection(config: ServerConfig) {
-        // 使用日志打印配置信息
-        Log.d("SettingsViewModel", "Testing connection: $config")
-        
+        val source = getConnectionTestSource()
+        Log.d(TAG, "Testing $source connection: ${config.toLogSummary()}")
 
         // 先检查网络状态
         if (!networkMonitor.isNetworkAvailable()) {
+            Log.e(TAG, "Test $source connection failed: network unavailable; ${config.toLogSummary()}")
             _uiState.update { 
                 it.copy(
                     testConnectionResult = TestConnectionResult.Failed(
@@ -300,19 +304,20 @@ class SettingsViewModel @Inject constructor(
             
             result.fold(
                 onSuccess = { success ->
-                    Log.d("onSuccess", "onSuccess: $success")
+                    Log.d(TAG, "Test $source connection result: $success; ${config.toLogSummary()}")
                     if (success) {
                         _uiState.update { 
                             it.copy(testConnectionResult = TestConnectionResult.Success()) 
                         }
                     } else {
+                        Log.e(TAG, "Test $source connection failed: repository returned false; ${config.toLogSummary()}")
                         _uiState.update { 
                             it.copy(testConnectionResult = TestConnectionResult.Failed("连接失败")) 
                         }
                     }
                 },
                 onFailure = { error ->
-                    Log.d("onFailure", "onFailure: $config")
+                    Log.e(TAG, "Test $source connection failed: ${config.toLogSummary()}", error)
                     val errorInfo = ErrorHandler.getErrorInfo(error, application)
                     _uiState.update { 
                         it.copy(testConnectionResult = TestConnectionResult.Failed(
@@ -337,5 +342,17 @@ class SettingsViewModel @Inject constructor(
      */
     fun clearTestResult() {
         _uiState.update { it.copy(testConnectionResult = null) }
+    }
+
+    private fun getConnectionTestSource(): String {
+        return when {
+            _uiState.value.showEditDialog -> "编辑服务器"
+            _uiState.value.showAddDialog -> "添加服务器"
+            else -> "服务器"
+        }
+    }
+
+    private fun ServerConfig.toLogSummary(): String {
+        return "serverName=$name, url=$url, hasUsername=${username.isNotBlank()}, hasPassword=${password.isNotBlank()}"
     }
 }

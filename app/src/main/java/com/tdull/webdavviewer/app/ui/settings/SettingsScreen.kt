@@ -7,7 +7,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ContentCopy
@@ -18,14 +17,12 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -46,7 +43,6 @@ private val TextMuted = Color(0xFF9CA3AF)        // 弱化文字
 private val IndigoPrimary = Color(0xFF4F46E5)    // 图标/标签主色
 private val IndigoLight = Color(0xFFEEF2FF)      // indigo 浅底
 private val RosePrimary = Color(0xFFF43F5E)      // 收藏红
-private val RoseLight = Color(0xFFFFF1F2)        // 收藏浅底
 
 /**
  * 设置页面 - 服务器配置管理
@@ -102,6 +98,12 @@ fun SettingsScreen(
                             modifier = Modifier.size(18.dp)
                         )
                     }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    SettingsMoreMenu(
+                        onNavigateToFavorites = onNavigateToFavorites,
+                        onNavigateToDownloads = onNavigateToDownloads,
+                        onNavigateToUploads = onNavigateToUploads
+                    )
                 }
             }
         }
@@ -119,35 +121,6 @@ fun SettingsScreen(
                 color = TextPrimary,
                 modifier = Modifier.padding(start = 20.dp, top = 8.dp, bottom = 8.dp)
             )
-
-            // 我的收藏入口
-            EntryCard(
-                icon = Icons.Default.Favorite,
-                iconTint = RosePrimary,
-                iconBg = RoseLight,
-                title = "我的收藏",
-                onClick = onNavigateToFavorites
-            )
-
-            // 已下载入口
-            EntryCard(
-                icon = Icons.Default.Download,
-                iconTint = IndigoPrimary,
-                iconBg = IndigoLight,
-                title = "已下载",
-                onClick = onNavigateToDownloads
-            )
-
-            // 上传任务入口
-            EntryCard(
-                icon = Icons.Default.UploadFile,
-                iconTint = IndigoPrimary,
-                iconBg = IndigoLight,
-                title = "上传任务",
-                onClick = onNavigateToUploads
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
 
             // 服务器列表
             if (uiState.servers.isEmpty()) {
@@ -280,59 +253,63 @@ fun SettingsScreen(
     }
 }
 
-/**
- * 入口卡片（我的收藏 / 已下载）——设计稿风格：白底圆角卡片 + 浅彩底图标方块 + 右箭头
- */
 @Composable
-private fun EntryCard(
-    icon: ImageVector,
-    iconTint: Color,
-    iconBg: Color,
-    title: String,
-    onClick: () -> Unit
+private fun SettingsMoreMenu(
+    onNavigateToFavorites: () -> Unit,
+    onNavigateToDownloads: () -> Unit,
+    onNavigateToUploads: () -> Unit
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 4.dp)
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardWhite),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Row(
+    var expanded by remember { mutableStateOf(false) }
+
+    Box {
+        Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 16.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .size(36.dp)
+                .background(IndigoLight, RoundedCornerShape(18.dp))
+                .clickable { expanded = true },
+            contentAlignment = Alignment.Center
         ) {
-            // 浅彩底图标方块
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .background(iconBg, RoundedCornerShape(12.dp)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(12.dp))
-            Text(
-                text = title,
-                fontSize = 15.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
-            )
-            Spacer(modifier = Modifier.weight(1f))
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                contentDescription = null,
-                tint = TextMuted,
-                modifier = Modifier.size(16.dp)
+                imageVector = Icons.Default.MoreVert,
+                contentDescription = "更多入口",
+                tint = IndigoPrimary,
+                modifier = Modifier.size(18.dp)
+            )
+        }
+
+        MenuPopupContainer(
+            expanded = expanded,
+            onDismiss = { expanded = false }
+        ) {
+            MenuItemRow(
+                icon = Icons.Default.Favorite,
+                iconTint = RosePrimary,
+                text = "我的收藏",
+                textColor = TextPrimary,
+                onClick = {
+                    expanded = false
+                    onNavigateToFavorites()
+                }
+            )
+            MenuItemRow(
+                icon = Icons.Default.Download,
+                iconTint = IndigoPrimary,
+                text = "已下载",
+                textColor = TextPrimary,
+                onClick = {
+                    expanded = false
+                    onNavigateToDownloads()
+                }
+            )
+            MenuItemRow(
+                icon = Icons.Default.UploadFile,
+                iconTint = IndigoPrimary,
+                text = "上传任务",
+                textColor = TextPrimary,
+                onClick = {
+                    expanded = false
+                    onNavigateToUploads()
+                }
             )
         }
     }
