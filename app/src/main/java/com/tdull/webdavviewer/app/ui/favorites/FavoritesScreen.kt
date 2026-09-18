@@ -43,7 +43,7 @@ private val DividerColor = Color(0xFFF3F4F6)     // 分割线
 @Composable
 fun FavoritesScreen(
     viewModel: FavoritesViewModel = hiltViewModel(),
-    onVideoClick: (String) -> Unit = {},
+    onVideoClick: (String, String) -> Unit = { _, _ -> },
     onNavigateBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -246,10 +246,10 @@ private fun FavoriteList(
  */
 private fun handleFavoriteClick(
     favorite: FavoriteItem,
-    onVideoClick: (String) -> Unit
+    onVideoClick: (String, String) -> Unit
 ) {
     // 直接使用收藏项中保存的 videoUrl 播放
-    onVideoClick(favorite.videoUrl)
+    onVideoClick(favorite.videoUrl, favorite.videoTitle)
 }
 
 /**

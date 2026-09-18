@@ -12,6 +12,7 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -67,6 +68,7 @@ fun ImageViewerScreen(
     imageTitle: String = "",
     items: List<ImageViewerItem> = emptyList(),
     initialIndex: Int = 0,
+    onShareImage: (ImageViewerItem) -> Unit = {},
     onBack: () -> Unit
 ) {
     // 解码URL（导航传递时编码了）
@@ -219,6 +221,7 @@ fun ImageViewerScreen(
                     null
                 },
                 onBack = onBack,
+                onShare = { onShareImage(currentItem) },
                 onReset = {
                     resetTransform()
                 },
@@ -435,6 +438,7 @@ private fun ImageViewerControls(
     title: String,
     pageIndicator: String?,
     onBack: () -> Unit,
+    onShare: () -> Unit,
     onReset: () -> Unit,
     showOriginalButton: Boolean,
     isOriginalLoading: Boolean,
@@ -501,6 +505,14 @@ private fun ImageViewerControls(
                         }
                     )
                 }
+            }
+
+            IconButton(onClick = onShare) {
+                Icon(
+                    imageVector = Icons.Default.Share,
+                    contentDescription = "分享图片",
+                    tint = Color.White
+                )
             }
 
             // 重置按钮

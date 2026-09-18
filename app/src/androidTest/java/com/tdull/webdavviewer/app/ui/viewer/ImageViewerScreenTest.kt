@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.doubleClick
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
@@ -91,13 +92,31 @@ class ImageViewerScreenTest {
         composeTestRule.onNodeWithText("two  2 / 3").assertIsDisplayed()
     }
 
-    private fun setImageViewer(initialIndex: Int = 0) {
+    @Test
+    fun imageViewer_shareButtonUsesCurrentPage() {
+        var sharedItem: ImageViewerItem? = null
+        setImageViewer(
+            initialIndex = 1,
+            onShareImage = { sharedItem = it }
+        )
+
+        composeTestRule.onNodeWithContentDescription("分享图片").performClick()
+        composeTestRule.waitForIdle()
+
+        assert(sharedItem?.title == "two")
+    }
+
+    private fun setImageViewer(
+        initialIndex: Int = 0,
+        onShareImage: (ImageViewerItem) -> Unit = {}
+    ) {
         composeTestRule.setContent {
             WebDAVViewerTheme {
                 ImageViewerScreen(
                     imageUrl = "https://example.com/one.jpg",
                     items = testItems(),
                     initialIndex = initialIndex,
+                    onShareImage = onShareImage,
                     onBack = {}
                 )
             }

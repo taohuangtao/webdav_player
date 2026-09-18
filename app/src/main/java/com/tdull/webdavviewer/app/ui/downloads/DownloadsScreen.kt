@@ -53,7 +53,7 @@ private val DividerColor = Color(0xFFF3F4F6)     // 分割线
 @Composable
 fun DownloadsScreen(
     viewModel: DownloadsViewModel = hiltViewModel(),
-    onVideoClick: (String) -> Unit = {},
+    onVideoClick: (String, String) -> Unit = { _, _ -> },
     onNavigateBack: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
@@ -417,7 +417,7 @@ private fun ActiveDownloadCard(
 private fun handleDownloadClick(
     download: DownloadItem,
     viewModel: DownloadsViewModel,
-    onVideoClick: (String) -> Unit
+    onVideoClick: (String, String) -> Unit
 ) {
     if (!viewModel.isFileExists(download.localPath)) {
         return
@@ -426,7 +426,7 @@ private fun handleDownloadClick(
     // 使用本地文件路径播放
     val localUrl = viewModel.getLocalVideoUrl(download.localPath)
     if (localUrl.isNotEmpty()) {
-        onVideoClick(localUrl)
+        onVideoClick(localUrl, download.videoTitle)
     }
 }
 

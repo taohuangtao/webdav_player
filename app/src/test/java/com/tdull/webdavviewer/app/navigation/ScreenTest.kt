@@ -24,5 +24,18 @@ class ScreenTest {
         )
     }
 
+    @Test
+    fun `VideoPlayer createRoute encodes url and title`() {
+        val url = "https://example.com/webdav/videos/movie #1.mp4"
+        val title = "movie #1.mp4"
+
+        val route = Screen.VideoPlayer.createRoute(url = url, title = title)
+
+        assertEquals(
+            "video?url=${url.encode()}&title=${title.encode()}",
+            route
+        )
+    }
+
     private fun String.encode(): String = URLEncoder.encode(this, "UTF-8")
 }

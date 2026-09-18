@@ -65,6 +65,7 @@ import androidx.compose.ui.platform.LocalContext
 import coil.compose.AsyncImage
 import com.tdull.webdavviewer.app.data.model.BrowserLayoutMode
 import com.tdull.webdavviewer.app.data.model.DownloadState
+import com.tdull.webdavviewer.app.data.model.MediaShareRequest
 import com.tdull.webdavviewer.app.data.model.ResourceType
 import com.tdull.webdavviewer.app.data.model.UploadConflictPolicy
 import com.tdull.webdavviewer.app.data.model.WebDAVResource
@@ -93,8 +94,9 @@ private val DividerColor = Color(0xFFF3F4F6)     // 分割线
 fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
     serverId: String? = null,
-    onVideoClick: (String) -> Unit = {},
+    onVideoClick: (String, String) -> Unit = { _, _ -> },
     onImageClick: (List<ImageViewerItem>, Int) -> Unit = { _, _ -> },
+    onShareResource: (MediaShareRequest) -> Unit = {},
     onNavigateToUploads: () -> Unit = {},
     onNavigateBack: () -> Unit = {}
 ) {
@@ -297,6 +299,9 @@ fun FileBrowserScreen(
                         },
                         onToggleFavorite = { resource ->
                             viewModel.toggleFavorite(resource)
+                        },
+                        onShare = { resource ->
+                            onShareResource(resource.toMediaShareRequest(viewModel))
                         },
                         onDownloadClick = { resource ->
                             viewModel.startDownload(resource)
@@ -512,6 +517,7 @@ private fun FileList(
     onLoadPreviews: (String) -> Unit,
     getResourceThumbnailUrl: (String) -> String,
     onToggleFavorite: (WebDAVResource) -> Unit,
+    onShare: (WebDAVResource) -> Unit,
     onDownloadClick: (WebDAVResource) -> Unit,
     onRetryDownload: (WebDAVResource) -> Unit,
     onCancelDownload: (WebDAVResource) -> Unit,
@@ -552,6 +558,7 @@ private fun FileList(
                             onDownload = { onDownloadClick(resource) },
                             onRetryDownload = { onRetryDownload(resource) },
                             onToggleFavorite = { onToggleFavorite(resource) },
+                            onShare = { onShare(resource) },
                             onRename = { onRename(resource) },
                             onMove = { onMove(resource) },
                             onDelete = { onDelete(resource) }
@@ -604,6 +611,7 @@ private fun FileList(
                             onDownload = { onDownloadClick(resource) },
                             onRetryDownload = { onRetryDownload(resource) },
                             onToggleFavorite = { onToggleFavorite(resource) },
+                            onShare = { onShare(resource) },
                             onRename = { onRename(resource) },
                             onMove = { onMove(resource) },
                             onDelete = { onDelete(resource) }
@@ -1041,7 +1049,7 @@ private fun handleFileClick(
     resource: WebDAVResource,
     files: List<WebDAVResource>,
     viewModel: FileBrowserViewModel,
-    onVideoClick: (String) -> Unit,
+    onVideoClick: (String, String) -> Unit,
     onImageClick: (List<ImageViewerItem>, Int) -> Unit
 ) {
     // 日志打印资源URL
@@ -1056,7 +1064,7 @@ private fun handleFileClick(
             // 播放视频
             val streamUrl = viewModel.getStreamUrl(resource.path)
             Log.d("FileBrowserScreen", "Video clicked: ${streamUrl}")
-            onVideoClick(streamUrl)
+            onVideoClick(streamUrl, resource.name)
         }
         resource.isImage -> {
             // 查看图片
@@ -1152,11 +1160,25 @@ private fun FileMenuItems(
     onDownload: () -> Unit,
     onRetryDownload: () -> Unit,
     onToggleFavorite: () -> Unit,
+    onShare: () -> Unit,
     onRename: () -> Unit,
     onMove: () -> Unit,
     onDelete: () -> Unit
 ) {
     if (!resource.isDirectory) {
+        if (resource.isImage || resource.isVideo) {
+            MenuItemRow(
+                icon = Icons.Default.Share,
+                iconTint = IndigoPrimary,
+                text = "分享",
+                textColor = TextPrimary,
+                onClick = {
+                    onDismiss()
+                    onShare()
+                }
+            )
+        }
+
         // 文件菜单：下载(仅视频,非下载中) / 收藏或取消收藏
         if (resource.isVideo && downloadState !is DownloadState.Downloading) {
             MenuItemRow(
@@ -1201,6 +1223,22 @@ private fun FileMenuItems(
         onMove = onMove,
         onDelete = onDelete
     )
+}
+
+private fun WebDAVResource.toMediaShareRequest(viewModel: FileBrowserViewModel): MediaShareRequest {
+    return MediaShareRequest(
+        url = viewModel.getStreamUrl(path),
+        title = name,
+        mimeType = contentType?.takeIf { it.isNotBlank() } ?: resourceType.toShareFallbackMimeType()
+    )
+}
+
+private fun ResourceType.toShareFallbackMimeType(): String? {
+    return when (this) {
+        ResourceType.IMAGE -> "image/*"
+        ResourceType.VIDEO -> "video/*"
+        else -> null
+    }
 }
 
 /**

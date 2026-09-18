@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.VideoFile
 import androidx.compose.material.icons.filled.VolumeDown
 import androidx.compose.material.icons.automirrored.filled.VolumeDown
@@ -65,6 +66,7 @@ import kotlinx.coroutines.launch
 fun VideoPlayerScreen(
     videoUrl: String,
     videoTitle: String = "",
+    onShareVideo: (String, String) -> Unit = { _, _ -> },
     onBack: () -> Unit,
     viewModel: VideoPlayerViewModel = hiltViewModel()
 ) {
@@ -272,6 +274,9 @@ fun VideoPlayerScreen(
                     onSpeedChange = { speed -> viewModel.setPlaybackSpeed(speed) },
                     onShowVideoInfo = { viewModel.toggleVideoInfoDialog(true) },
                     onShowSettings = { viewModel.toggleSettingsDialog(true) },
+                    onShareVideo = {
+                        onShareVideo(videoUrl, videoTitle.ifBlank { videoUrl.substringAfterLast('/') })
+                    },
                     onToggleFavorite = { viewModel.toggleFavorite(videoUrl, videoTitle) },
                     onTogglePlaylist = { viewModel.togglePlaylist() },
                     modifier = Modifier.align(Alignment.BottomStart)
@@ -599,6 +604,7 @@ private fun VideoPlayerBottomControls(
     onSpeedChange: (Float) -> Unit,
     onShowVideoInfo: () -> Unit,
     onShowSettings: () -> Unit,
+    onShareVideo: () -> Unit,
     onToggleFavorite: () -> Unit = {},
     onTogglePlaylist: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -835,6 +841,24 @@ private fun VideoPlayerBottomControls(
                     onDismissRequest = { showMoreMenu = false },
                     modifier = Modifier.background(Color.Black.copy(alpha = 0.9f))
                 ) {
+                    DropdownMenuItem(
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Share,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(text = "分享", color = Color.White)
+                            }
+                        },
+                        onClick = {
+                            showMoreMenu = false
+                            onShareVideo()
+                        }
+                    )
                     // 收藏/取消收藏按钮
                     DropdownMenuItem(
                         text = {

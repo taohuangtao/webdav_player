@@ -3,12 +3,15 @@ package com.tdull.webdavviewer.app.navigation
 import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.tdull.webdavviewer.app.data.model.MediaShareRequest
 import com.tdull.webdavviewer.app.ui.browser.FileBrowserScreen
+import com.tdull.webdavviewer.app.ui.components.MediaShareHost
 import com.tdull.webdavviewer.app.ui.player.VideoPlayerScreen
 import com.tdull.webdavviewer.app.ui.settings.SettingsScreen
 import com.tdull.webdavviewer.app.ui.viewer.ImageViewerScreen
@@ -16,6 +19,7 @@ import com.tdull.webdavviewer.app.ui.viewer.ImageViewerItem
 import com.tdull.webdavviewer.app.ui.favorites.FavoritesScreen
 import com.tdull.webdavviewer.app.ui.downloads.DownloadsScreen
 import com.tdull.webdavviewer.app.ui.uploads.UploadsScreen
+import com.tdull.webdavviewer.app.viewmodel.MediaShareViewModel
 import java.net.URLDecoder
 
 private const val IMAGE_VIEWER_URLS_KEY = "imageViewerUrls"
@@ -67,10 +71,11 @@ fun AppNavGraph(
             )
         ) { backStackEntry ->
             val serverId = backStackEntry.arguments?.getString("serverId")
+            val mediaShareViewModel: MediaShareViewModel = hiltViewModel()
             FileBrowserScreen(
                 serverId = serverId,
-                onVideoClick = { url ->
-                    navController.navigate(Screen.VideoPlayer.createRoute(url))
+                onVideoClick = { url, title ->
+                    navController.navigate(Screen.VideoPlayer.createRoute(url, title))
                 },
                 onImageClick = { items, initialIndex ->
                     val selectedItem = items.getOrNull(initialIndex) ?: items.firstOrNull()
@@ -90,6 +95,9 @@ fun AppNavGraph(
                         )
                     }
                 },
+                onShareResource = { request ->
+                    mediaShareViewModel.prepareShare(request)
+                },
                 onNavigateToUploads = {
                     navController.navigate(Screen.Uploads.route)
                 },
@@ -97,6 +105,7 @@ fun AppNavGraph(
                     navController.popBackStack()
                 }
             )
+            MediaShareHost(viewModel = mediaShareViewModel)
         }
 
         // 视频播放器页面
@@ -112,6 +121,7 @@ fun AppNavGraph(
                 }
             )
         ) { backStackEntry ->
+            val mediaShareViewModel: MediaShareViewModel = hiltViewModel()
             val encodedUrl = backStackEntry.arguments?.getString("url") ?: ""
             val encodedTitle = backStackEntry.arguments?.getString("title") ?: ""
 
@@ -130,10 +140,20 @@ fun AppNavGraph(
             VideoPlayerScreen(
                 videoUrl = videoUrl,
                 videoTitle = videoTitle,
+                onShareVideo = { url, title ->
+                    mediaShareViewModel.prepareShare(
+                        MediaShareRequest(
+                            url = url,
+                            title = title,
+                            mimeType = "video/*"
+                        )
+                    )
+                },
                 onBack = {
                     navController.popBackStack()
                 }
             )
+            MediaShareHost(viewModel = mediaShareViewModel)
         }
 
         // 图片查看器页面
@@ -153,6 +173,7 @@ fun AppNavGraph(
                 }
             )
         ) { backStackEntry ->
+            val mediaShareViewModel: MediaShareViewModel = hiltViewModel()
             val imageUrl = backStackEntry.arguments?.getString("url") ?: ""
             val imageTitle = backStackEntry.arguments?.getString("title") ?: ""
             val mediumThumbnailUrl = backStackEntry.arguments?.getString("thumbnailUrl") ?: ""
@@ -177,17 +198,27 @@ fun AppNavGraph(
                 imageTitle = imageTitle,
                 items = imageItems,
                 initialIndex = initialIndex,
+                onShareImage = { item ->
+                    mediaShareViewModel.prepareShare(
+                        MediaShareRequest(
+                            url = item.url,
+                            title = item.title,
+                            mimeType = "image/*"
+                        )
+                    )
+                },
                 onBack = {
                     navController.popBackStack()
                 }
             )
+            MediaShareHost(viewModel = mediaShareViewModel)
         }
 
         // 收藏列表页面
         composable(route = Screen.Favorites.route) {
             FavoritesScreen(
-                onVideoClick = { url ->
-                    navController.navigate(Screen.VideoPlayer.createRoute(url))
+                onVideoClick = { url, title ->
+                    navController.navigate(Screen.VideoPlayer.createRoute(url, title))
                 },
                 onNavigateBack = {
                     navController.popBackStack()
@@ -198,8 +229,8 @@ fun AppNavGraph(
         // 下载列表页面
         composable(route = Screen.Downloads.route) {
             DownloadsScreen(
-                onVideoClick = { url ->
-                    navController.navigate(Screen.VideoPlayer.createRoute(url))
+                onVideoClick = { url, title ->
+                    navController.navigate(Screen.VideoPlayer.createRoute(url, title))
                 },
                 onNavigateBack = {
                     navController.popBackStack()
